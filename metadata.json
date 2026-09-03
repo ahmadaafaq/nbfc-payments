@@ -1,0 +1,6 @@
+{
+  "name": "MGM Payment Operations",
+  "description": "Maker-checker payment operations, AI document verification, and bank file export platform for MGM Financiers Pvt Limited.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
