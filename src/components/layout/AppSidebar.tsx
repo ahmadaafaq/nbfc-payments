@@ -171,6 +171,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   };
 
   const isMaker = currentUser.role === "MAKER" || currentUser.role === "ADMIN";
+  // When mobile drawer is open, never render collapsed/icon-only layout
+  const isEffectiveCollapsed = isCollapsed && !isMobileOpen;
 
   return (
     <>
@@ -186,7 +188,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
       <aside
         id="app-sidebar"
         className={`fixed lg:sticky top-16 left-0 z-40 h-[calc(100vh-4rem)] bg-slate-100/95 dark:bg-black/30 backdrop-blur-2xl border-r border-slate-200/90 dark:border-white/10 flex flex-col justify-between transition-all duration-300 lg:translate-x-0 ${
-          isCollapsed ? "lg:w-18 p-2.5" : "lg:w-64 p-4"
+          isEffectiveCollapsed ? "lg:w-18 p-2.5" : "lg:w-64 p-4"
         } ${
           isMobileOpen ? "translate-x-0 w-64 shadow-2xl p-4" : "-translate-x-full lg:translate-x-0"
         }`}
@@ -195,7 +197,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           {/* Top Collapse Toggle on Desktop */}
           {setIsCollapsed && (
             <div className="hidden lg:flex items-center justify-between pb-1">
-              {!isCollapsed && (
+              {!isEffectiveCollapsed && (
                 <span className="text-[11px] uppercase tracking-wider text-slate-600 dark:text-white/50 font-black px-2">
                   MGM Workspace
                 </span>
@@ -204,11 +206,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 type="button"
                 onClick={() => setIsCollapsed(!isCollapsed)}
                 className={`p-1.5 rounded-xl text-slate-700 dark:text-white/60 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition border border-transparent hover:border-slate-300 dark:hover:border-white/15 ${
-                  isCollapsed ? "mx-auto" : "ml-auto"
+                  isEffectiveCollapsed ? "mx-auto" : "ml-auto"
                 }`}
-                title={isCollapsed ? "Expand Navigation Sidebar" : "Collapse Sidebar"}
+                title={isEffectiveCollapsed ? "Expand Navigation Sidebar" : "Collapse Sidebar"}
               >
-                {isCollapsed ? (
+                {isEffectiveCollapsed ? (
                   <PanelLeftOpen className="w-4 h-4" />
                 ) : (
                   <PanelLeftClose className="w-4 h-4" />
@@ -218,7 +220,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           )}
 
           {/* Phase 1 vs Phase 2 Mode Toggle */}
-          {!isCollapsed ? (
+          {!isEffectiveCollapsed ? (
             <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-200/80 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-[11px] font-bold">
               <button
                 onClick={() => {
@@ -268,7 +270,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               onClick={() => handleItemClick("create-payment")}
               title="Create Payment"
               className={`w-full flex items-center justify-center gap-2 rounded-xl text-xs font-semibold transition-all shadow-md border active:scale-95 ${
-                isCollapsed ? "py-2.5 px-2" : "py-2.5 px-4"
+                isEffectiveCollapsed ? "py-2.5 px-2" : "py-2.5 px-4"
               } ${
                 currentView === "create-payment"
                   ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-white/30 shadow-purple-900/50 ring-2 ring-purple-400/40"
@@ -276,7 +278,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               }`}
             >
               <PlusCircle className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span className="truncate">Create Payment</span>}
+              {!isEffectiveCollapsed && <span className="truncate">Create Payment</span>}
             </button>
           )}
 
@@ -286,7 +288,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               onClick={() => handleItemClick("disbursals")}
               title="Record Disbursal"
               className={`w-full flex items-center justify-center gap-2 rounded-xl text-xs font-semibold transition-all shadow-md border active:scale-95 ${
-                isCollapsed ? "py-2.5 px-2" : "py-2.5 px-4"
+                isEffectiveCollapsed ? "py-2.5 px-2" : "py-2.5 px-4"
               } ${
                 currentView === "disbursals"
                   ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-white/30 shadow-purple-900/50 ring-2 ring-purple-400/40"
@@ -294,7 +296,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
               }`}
             >
               <FileText className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span className="truncate">Record Disbursal</span>}
+              {!isEffectiveCollapsed && <span className="truncate">Record Disbursal</span>}
             </button>
           )}
 
@@ -311,7 +313,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                   onClick={() => handleItemClick(item.id)}
                   title={item.label}
                   className={`w-full flex items-center rounded-xl text-xs transition-all group ${
-                    isCollapsed
+                    isEffectiveCollapsed
                       ? "justify-center py-2.5 px-2"
                       : "justify-between px-3.5 py-2.5"
                   } ${
@@ -320,7 +322,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                       : "text-slate-700 hover:text-slate-950 hover:bg-slate-200/80 dark:text-white/70 dark:hover:text-white dark:hover:bg-white/5 border border-transparent font-medium"
                   }`}
                 >
-                  <div className={`flex items-center ${isCollapsed ? "justify-center" : "gap-3"}`}>
+                  <div className={`flex items-center ${isEffectiveCollapsed ? "justify-center" : "gap-3"}`}>
                     <Icon
                       className={`w-4 h-4 shrink-0 transition-colors ${
                         isActive
@@ -328,10 +330,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                           : "text-slate-500 dark:text-white/40 group-hover:text-slate-900 dark:group-hover:text-white"
                       }`}
                     />
-                    {!isCollapsed && <span className="truncate">{item.label}</span>}
+                    {!isEffectiveCollapsed && <span className="truncate">{item.label}</span>}
                   </div>
 
-                  {!isCollapsed && item.badge !== undefined && (
+                  {!isEffectiveCollapsed && item.badge !== undefined && (
                     <span
                       className={`px-2 py-0.5 rounded-full text-[10px] leading-none ${
                         isActive
@@ -343,7 +345,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                     </span>
                   )}
 
-                  {isCollapsed && item.badge !== undefined && (
+                  {isEffectiveCollapsed && item.badge !== undefined && (
                     <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-purple-500 ring-2 ring-white dark:ring-slate-950" />
                   )}
                 </button>
@@ -353,7 +355,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
         </div>
 
         {/* Bottom Quick Card: Powered by Codevamp Technologies */}
-        {isCollapsed ? (
+        {isEffectiveCollapsed ? (
           <div className="pt-2 flex justify-center">
             <a
               href="https://www.codevampt.tech"

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { StorageService } from "../../../services/storageService";
 import { DSAPartner, CommissionPayable } from "../../../types";
+import { MGMLogo } from "../../common/MGMLogo";
 
 export const PayoutStatementsView: React.FC = () => {
   const dsas = StorageService.getDSAs();
@@ -160,10 +161,8 @@ export const PayoutStatementsView: React.FC = () => {
         <div className="border-b border-white/10 pb-6 print:border-slate-300">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-600 text-white font-black text-base flex items-center justify-center shadow-lg border border-white/20 print:border-slate-800">
-                  MGM
-                </div>
+              <div className="flex items-center gap-3">
+                <MGMLogo size="lg" showText={false} />
                 <div>
                   <h2 className="text-lg font-black tracking-tight text-white print:text-slate-950">
                     MGM FINANCIERS PRIVATE LIMITED

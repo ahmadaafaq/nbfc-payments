@@ -15,6 +15,7 @@ import {
 import { StorageService } from "../../services/storageService";
 import { Branch, UserProfile, InAppNotification, UserRole } from "../../types";
 import { PWAInstallButton } from "../common/PWAInstallButton";
+import { MGMLogo } from "../common/MGMLogo";
 
 interface AppHeaderProps {
   onNavigate?: (view: string) => void;
@@ -102,25 +103,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
     >
       {/* Left: Brand Identity & Mobile Title */}
       <div className="flex items-center gap-3 md:gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-purple-900/30 border border-white/20">
-            MGM
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-sm md:text-base tracking-tight text-white">
-                MGM Payment Operations
-              </span>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider bg-gradient-to-r from-purple-500/25 to-blue-500/25 text-purple-200 border border-purple-400/40">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                PHASE 1 &amp; 2 • DSA AUTOMATION
-              </span>
-            </div>
-            <p className="text-[11px] text-white/50 font-medium hidden md:block">
-              MGM Financiers Pvt Limited • NBFC
-            </p>
-          </div>
-        </div>
+        <button
+          onClick={() => onNavigate && onNavigate("dashboard")}
+          className="text-left focus:outline-none group transition-opacity hover:opacity-95"
+          title="MGM Payment Operations Dashboard"
+        >
+          <MGMLogo size="md" />
+        </button>
 
         {/* Vertical Divider */}
         <div className="hidden lg:block h-6 w-px bg-white/10 mx-1" />

@@ -31,12 +31,15 @@ export default function App() {
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [theme, setTheme] = useState<"light" | "dark">(StorageService.getTheme());
 
-  // Auto-collapse sidebar when on Checker Review Desk to give maximum screen real estate
+  // Auto-collapse sidebar when on Checker Review Desk to give maximum screen real estate on desktop only
   useEffect(() => {
-    if (currentView === "checker-review") {
-      setIsSidebarCollapsed(true);
-    } else {
-      setIsSidebarCollapsed(false);
+    const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
+    if (isDesktop) {
+      if (currentView === "checker-review") {
+        setIsSidebarCollapsed(true);
+      } else {
+        setIsSidebarCollapsed(false);
+      }
     }
   }, [currentView]);
 
