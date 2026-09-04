@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, AlertTriangle, CheckCircle, ShieldCheck } from "lucide-react";
 
 interface ConfirmModalProps {
@@ -26,6 +27,25 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   details,
   loading = false,
 }) => {
+  // Lock body scroll and handle Escape key
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape" && !loading) {
+          onClose();
+        }
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [isOpen, loading, onClose]);
+
   if (!isOpen) return null;
 
   const getButtonClasses = () => {
@@ -51,17 +71,20 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     }
   };
 
-  return (
+  const modalContent = (
     <div
       id="confirm-modal-overlay"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose();
+      }}
     >
       <div
         id="confirm-modal-box"
-        className="w-full max-w-md rounded-2xl glass-dropdown shadow-2xl border border-white/20 overflow-hidden text-white"
+        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl glass-card bg-slate-950/95 shadow-2xl border border-white/20 text-white"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 sticky top-0 bg-slate-950/90 backdrop-blur-md z-10">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-white/10 border border-white/15">
               {getIcon()}
@@ -70,6 +93,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            disabled={loading}
             className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition"
           >
             <X className="w-4 h-4" />
@@ -108,7 +132,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-3 px-5 py-3.5 bg-white/5 border-t border-white/10">
+        <div className="flex items-center justify-end gap-3 px-5 py-3.5 bg-white/5 border-t border-white/10 sticky bottom-0 bg-slate-950/90 backdrop-blur-md z-10">
           <button
             id="modal-cancel-button"
             type="button"
@@ -131,4 +155,6 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : null;
 };

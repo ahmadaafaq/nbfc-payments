@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, XCircle, CornerUpLeft } from "lucide-react";
 
 interface RejectModalProps {
@@ -22,6 +23,22 @@ export const RejectModal: React.FC<RejectModalProps> = ({
   setNotes,
   error,
 }) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const quickTemplates = [
@@ -32,9 +49,14 @@ export const RejectModal: React.FC<RejectModalProps> = ({
     "Duplicate payout requested for previously settled loan account.",
   ];
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in">
-      <div className="w-full max-w-lg rounded-3xl glass-card border border-rose-500/30 bg-slate-950/90 shadow-2xl p-6 space-y-4 text-white">
+  const content = (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-card border border-rose-500/30 bg-slate-950/95 shadow-2xl p-5 sm:p-6 space-y-4 text-white">
         <div className="flex items-center gap-2.5 text-rose-400">
           <div className="p-2 rounded-2xl bg-rose-500/20">
             <XCircle className="w-5 h-5" />
@@ -127,6 +149,8 @@ export const RejectModal: React.FC<RejectModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(content, document.body) : null;
 };
 
 interface SendBackModalProps {
@@ -148,6 +172,22 @@ export const SendBackModal: React.FC<SendBackModalProps> = ({
   setNotes,
   error,
 }) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = "";
+    }
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const quickSendBackTemplates = [
@@ -157,9 +197,14 @@ export const SendBackModal: React.FC<SendBackModalProps> = ({
     "Please ensure authorized branch stamp is visible before resubmission.",
   ];
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4 animate-in fade-in">
-      <div className="w-full max-w-lg rounded-3xl glass-card border border-amber-500/30 bg-slate-950/90 shadow-2xl p-6 space-y-4 text-white">
+  const content = (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-card border border-amber-500/30 bg-slate-950/95 shadow-2xl p-5 sm:p-6 space-y-4 text-white">
         <div className="flex items-center gap-2.5 text-amber-400">
           <div className="p-2 rounded-2xl bg-amber-500/20">
             <CornerUpLeft className="w-5 h-5" />
@@ -229,4 +274,6 @@ export const SendBackModal: React.FC<SendBackModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined" ? createPortal(content, document.body) : null;
 };

@@ -223,6 +223,16 @@ export interface Payment {
   batchId?: string;
   bankSubmission?: BankSubmissionDetails;
   duplicateWarningOverridden?: boolean;
+
+  // Phase 2 Traceability Links
+  sourceType?: "MANUAL" | "COMMISSION_PAYABLE" | "BULK_UPLOAD";
+  commissionPayableId?: string;
+  disbursalId?: string;
+  dsaId?: string;
+  dsaName?: string;
+  commissionRuleId?: string;
+  commissionRuleVersion?: number;
+  customerReference?: string;
 }
 
 export interface PaymentBatch {
@@ -274,4 +284,215 @@ export interface InAppNotification {
   type: "info" | "warning" | "success" | "danger";
   paymentId?: string;
   batchId?: string;
+  payableId?: string;
+}
+
+// ============================================================================
+// PHASE 2: COMMISSION AUTOMATION TYPES & INTERFACES
+// ============================================================================
+
+export type AppPhase = "PHASE_1" | "PHASE_2";
+
+export type DSAStatus = "ACTIVE" | "INACTIVE" | "ON_HOLD";
+export type BankVerificationStatus = "VERIFIED" | "PENDING_VERIFICATION" | "FLAGGED";
+
+export interface DSABankAuditRecord {
+  id: string;
+  dsaId: string;
+  previousAccount: string;
+  newAccount: string;
+  previousIfsc: string;
+  newIfsc: string;
+  previousBank: string;
+  newBank: string;
+  previousHolderName: string;
+  newHolderName: string;
+  changedBy: string;
+  changedByRole: UserRole;
+  timestamp: string;
+  reason: string;
+  verificationStatus: BankVerificationStatus;
+}
+
+export interface DSAPartner {
+  id: string; // e.g. DSA-LDH-001
+  dsaCode: string; // e.g. ABC-FIN
+  name: string; // e.g. ABC Finance
+  legalName: string; // e.g. ABC Financial Advisory Services LLP
+  contactPerson: string;
+  mobile: string;
+  email: string;
+  branchId: string;
+  branchName: string;
+  pan: string;
+  gstin?: string;
+  
+  // Banking details
+  bankName: string;
+  accountNumber: string;
+  ifsc: string;
+  accountHolderName: string;
+  bankVerificationStatus: BankVerificationStatus;
+  
+  commissionScheme: string; // e.g. "Standard Retail Tier", "Gold Commercial Slabs"
+  status: DSAStatus;
+  effectiveDate: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Audit log of bank detail updates
+  bankAuditHistory?: DSABankAuditRecord[];
+}
+
+export type CommissionRuleType = "GLOBAL" | "PRODUCT_SPECIFIC" | "DSA_SPECIFIC" | "BRANCH_SPECIFIC";
+
+export interface CommissionRuleVersion {
+  id: string;
+  ruleId: string;
+  version: number;
+  commissionPercentage: number;
+  effectiveFrom: string;
+  effectiveUntil?: string;
+  changedBy: string;
+  changedAt: string;
+  changeReason: string;
+}
+
+export interface CommissionRule {
+  id: string; // e.g. RULE-PL-TIER1
+  name: string; // e.g. Personal Loan Standard
+  product: string; // e.g. "Personal Loan", "Business Loan", "Loan Against Property", "Used Car Loan", "Micro Enterprise Loan"
+  dsaId?: string; // If DSA-specific
+  dsaName?: string;
+  branchId?: string; // If branch-specific
+  branchName?: string;
+  slabMin: number; // in INR e.g. 100000
+  slabMax: number; // in INR e.g. 500000 (or Infinity)
+  commissionPercentage: number; // e.g. 1.25
+  ruleType: CommissionRuleType;
+  effectiveFrom: string; // YYYY-MM-DD
+  effectiveUntil?: string; // YYYY-MM-DD
+  version: number; // 1, 2, 3...
+  status: "ACTIVE" | "INACTIVE" | "EXPIRED";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  versions?: CommissionRuleVersion[];
+}
+
+export type DisbursalStatus =
+  | "READY"
+  | "CALCULATED"
+  | "MISSING_DSA"
+  | "MISSING_RULE"
+  | "DUPLICATE"
+  | "ON_HOLD";
+
+export interface Disbursal {
+  id: string; // e.g. DISB-2026-001
+  fileId: string; // e.g. MGM-45821
+  applicationId?: string; // e.g. APP-99210
+  disbursalDate: string;
+  branchId: string;
+  branchName: string;
+  product: string;
+  dsaId: string;
+  dsaName: string;
+  customerReference: string;
+  disbursalAmount: number;
+  loanReference: string;
+  status: DisbursalStatus;
+  
+  // Rule metadata locked in during calculation
+  applicableRuleId?: string;
+  applicableRuleName?: string;
+  applicableRuleVersion?: number;
+  commissionRate?: number;
+  grossCommission?: number;
+  netCommission?: number;
+  
+  duplicateOfFileId?: string;
+  notes?: string;
+  createdBy: string;
+  createdAt: string;
+  supportingDocumentUrl?: string;
+}
+
+export type AdjustmentType = "TDS" | "RECOVERY" | "ADVANCE_ADJUSTMENT" | "MANUAL_ADJUSTMENT" | "OTHER";
+
+export interface CommissionAdjustment {
+  id: string;
+  type: AdjustmentType;
+  amount: number; // in INR (reduction if positive, addition if negative)
+  reason: string;
+  adjustedBy: string;
+  adjustedAt: string;
+}
+
+export type CommissionPayableStatus =
+  | "CALCULATED"
+  | "READY_FOR_PAYOUT"
+  | "ON_HOLD"
+  | "PAYMENT_GENERATED"
+  | "PENDING_CHECKER"
+  | "APPROVED"
+  | "PAID"
+  | "REJECTED";
+
+export interface CommissionPayable {
+  id: string; // e.g. CP-00182
+  disbursalId: string;
+  fileId: string;
+  applicationId?: string;
+  dsaId: string;
+  dsaName: string;
+  dsaAccountNumber: string;
+  dsaIfsc: string;
+  dsaBankName: string;
+  dsaAccountHolderName: string;
+  branchId: string;
+  branchName: string;
+  product: string;
+  customerReference: string;
+  disbursalDate: string;
+  disbursalAmount: number;
+  
+  // Commission calculation breakdown
+  commissionRuleId: string;
+  commissionRuleName: string;
+  commissionRuleVersion: number;
+  commissionRate: number; // e.g. 1.50%
+  grossCommission: number; // e.g. 12000
+  
+  adjustments: CommissionAdjustment[];
+  totalAdjustments: number; // sum of adjustments (e.g. 500)
+  netPayable: number; // e.g. 11500
+  
+  status: CommissionPayableStatus;
+  holdReason?: string;
+  holdSetBy?: string;
+  holdSetAt?: string;
+  
+  paymentId?: string; // Linked Phase 1 Payment ID (e.g. PAY-20260903-0042)
+  calculatedAt: string;
+  calculatedBy: string;
+  auditTrail: AuditLogEntry[];
+}
+
+export interface PayoutStatementSummary {
+  dsaId: string;
+  dsaName: string;
+  period: string; // e.g. "September 2026", "Q2 FY2026-27"
+  branchName: string;
+  totalDisbursalsCount: number;
+  totalDisbursedAmount: number;
+  grossCommission: number;
+  totalAdjustments: number;
+  netPayable: number;
+  paidAmount: number;
+  outstandingBalance: number;
+  payables: CommissionPayable[];
+  generatedAt: string;
+  generatedBy: string;
 }

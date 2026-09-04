@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Settings,
   Building2,
@@ -412,11 +413,11 @@ export const AdminView: React.FC = () => {
       {/* 2. System Health & Navigation Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl glass-card border border-white/10 shadow-lg">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-2xl border border-white/10 text-xs font-semibold">
+        <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-2xl border border-white/10 text-xs font-semibold overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={() => setActiveTab("all")}
-            className={`px-3.5 py-1.5 rounded-xl transition ${
+            className={`px-3.5 py-1.5 rounded-xl transition whitespace-nowrap ${
               activeTab === "all"
                 ? "bg-purple-600 text-white shadow-md font-bold"
                 : "text-white/60 hover:text-white"
@@ -427,7 +428,7 @@ export const AdminView: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab("branches")}
-            className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === "branches"
                 ? "bg-purple-600 text-white shadow-md font-bold"
                 : "text-white/60 hover:text-white"
@@ -439,7 +440,7 @@ export const AdminView: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab("accounts")}
-            className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === "accounts"
                 ? "bg-purple-600 text-white shadow-md font-bold"
                 : "text-white/60 hover:text-white"
@@ -451,7 +452,7 @@ export const AdminView: React.FC = () => {
           <button
             type="button"
             onClick={() => setActiveTab("users")}
-            className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap ${
               activeTab === "users"
                 ? "bg-purple-600 text-white shadow-md font-bold"
                 : "text-white/60 hover:text-white"
@@ -778,10 +779,15 @@ export const AdminView: React.FC = () => {
       )}
 
       {/* ================= MODAL: ADD / EDIT BRANCH ================= */}
-      {isBranchModalOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-6 space-y-4 text-white">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+      {isBranchModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsBranchModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-5 sm:p-6 space-y-4 text-white">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 sticky top-0 bg-slate-950/90 backdrop-blur-md z-10">
               <div className="flex items-center gap-2 text-purple-300">
                 <Building2 className="w-5 h-5" />
                 <h3 className="text-base font-bold text-white">
@@ -885,7 +891,7 @@ export const AdminView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10 sticky bottom-0 bg-slate-950/90 backdrop-blur-md">
                 <button
                   type="button"
                   onClick={() => setIsBranchModalOpen(false)}
@@ -902,14 +908,20 @@ export const AdminView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= MODAL: ADD / EDIT ACCOUNT ================= */}
-      {isAccountModalOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-6 space-y-4 text-white">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+      {isAccountModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsAccountModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-5 sm:p-6 space-y-4 text-white">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 sticky top-0 bg-slate-950/90 backdrop-blur-md z-10">
               <div className="flex items-center gap-2 text-blue-300">
                 <CreditCard className="w-5 h-5" />
                 <h3 className="text-base font-bold text-white">
@@ -1022,7 +1034,7 @@ export const AdminView: React.FC = () => {
                 </label>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10 sticky bottom-0 bg-slate-950/90 backdrop-blur-md">
                 <button
                   type="button"
                   onClick={() => setIsAccountModalOpen(false)}
@@ -1039,14 +1051,20 @@ export const AdminView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= MODAL: ADD / EDIT USER & ROLE MAPPING ================= */}
-      {isUserModalOpen && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="w-full max-w-lg rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-6 space-y-4 text-white">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+      {isUserModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsUserModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-5 sm:p-6 space-y-4 text-white">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 sticky top-0 bg-slate-950/90 backdrop-blur-md z-10">
               <div className="flex items-center gap-2 text-purple-300">
                 <Users className="w-5 h-5" />
                 <h3 className="text-base font-bold text-white">
@@ -1149,7 +1167,7 @@ export const AdminView: React.FC = () => {
                 <strong>RBI Segregation Policy:</strong> Makers cannot approve their own transactions. Checkers will review all disbursements with independent optical AI verification.
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/10 sticky bottom-0 bg-slate-950/90 backdrop-blur-md">
                 <button
                   type="button"
                   onClick={() => setIsUserModalOpen(false)}
@@ -1166,7 +1184,8 @@ export const AdminView: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ================= CONFIRM MODALS FOR DELETIONS ================= */}

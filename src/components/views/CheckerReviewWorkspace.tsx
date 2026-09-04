@@ -614,36 +614,36 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
         {/* RIGHT COLUMN: AI Optical Reconciliation & Audit Matrix */}
         <div className={`${getDataColSpan()} space-y-4`}>
           {/* Tabs for Right Column */}
-          <div className="flex items-center justify-between p-1.5 rounded-2xl bg-white/10 border border-white/10 backdrop-blur-md">
-            <div className="flex items-center gap-1 text-xs font-semibold">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-1.5 rounded-2xl bg-white/10 border border-white/10 backdrop-blur-md">
+            <div className="flex items-center gap-1 text-xs font-semibold overflow-x-auto max-w-full">
               <button
                 type="button"
                 onClick={() => setActiveTab("verification")}
-                className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap ${
                   activeTab === "verification"
                     ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md font-bold"
                     : "text-white/60 hover:text-white"
                 }`}
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>3-Way Optical Reconciliation</span>
+                <span>3-Way Reconciliation</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("audit")}
-                className={`px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap ${
                   activeTab === "audit"
                     ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-md font-bold"
                     : "text-white/60 hover:text-white"
                 }`}
               >
                 <History className="w-3.5 h-3.5 text-purple-300" />
-                <span>Compliance &amp; Audit Log ({payment.auditTrail.length})</span>
+                <span>Audit Log ({payment.auditTrail.length})</span>
               </button>
             </div>
 
-            <div className="pr-2">
-              <span className="text-[11px] font-mono text-white/50">
+            <div className="px-2 hidden md:block">
+              <span className="text-[11px] font-mono text-white/50 whitespace-nowrap">
                 Engine: Gemini 2.5 Pro
               </span>
             </div>

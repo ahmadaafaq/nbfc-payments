@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Layers,
   Plus,
@@ -285,9 +286,14 @@ export const PaymentBatchesView: React.FC<PaymentBatchesViewProps> = ({ onNaviga
       )}
 
       {/* New Batch Creation Modal */}
-      {showNewBatchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-          <div className="w-full max-w-lg rounded-3xl glass-card border border-white/20 bg-slate-950/80 shadow-2xl p-6 space-y-4 text-white">
+      {showNewBatchModal && typeof document !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowNewBatchModal(false);
+          }}
+        >
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl glass-card border border-white/20 bg-slate-950/95 shadow-2xl p-5 sm:p-6 space-y-4 text-white">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Layers className="w-5 h-5 text-purple-400" />
@@ -380,7 +386,8 @@ export const PaymentBatchesView: React.FC<PaymentBatchesViewProps> = ({ onNaviga
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
