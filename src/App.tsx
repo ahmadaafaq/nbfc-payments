@@ -13,6 +13,12 @@ import { ReconciliationView } from "./components/views/ReconciliationView";
 import { ReportsView } from "./components/views/ReportsView";
 import { AIConsoleView } from "./components/views/AIConsoleView";
 import { AdminView } from "./components/views/AdminView";
+import { DSAMasterView } from "./components/views/phase2/DSAMasterView";
+import { CommissionRulesView } from "./components/views/phase2/CommissionRulesView";
+import { DisbursalsView } from "./components/views/phase2/DisbursalsView";
+import { CommissionPayablesView } from "./components/views/phase2/CommissionPayablesView";
+import { PayoutStatementsView } from "./components/views/phase2/PayoutStatementsView";
+import { CommissionAnalyticsView } from "./components/views/phase2/CommissionAnalyticsView";
 import { StorageService } from "./services/storageService";
 import { ToastContainer } from "./components/common/ToastNotification";
 import { Menu, X } from "lucide-react";
@@ -99,6 +105,19 @@ export default function App() {
         return <AIConsoleView />;
       case "admin":
         return <AdminView />;
+      // Phase 2: DSA Channel Partner & Commission Engine Views
+      case "dsa-master":
+        return <DSAMasterView onNavigate={handleNavigate} />;
+      case "commission-rules":
+        return <CommissionRulesView onNavigate={handleNavigate} />;
+      case "disbursals":
+        return <DisbursalsView onNavigate={handleNavigate} />;
+      case "commission-payables":
+        return <CommissionPayablesView onNavigate={handleNavigate} />;
+      case "payout-statements":
+        return <PayoutStatementsView />;
+      case "commission-analytics":
+        return <CommissionAnalyticsView />;
       default:
         return <DashboardView onNavigate={handleNavigate} />;
     }

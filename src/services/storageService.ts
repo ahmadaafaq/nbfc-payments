@@ -1020,6 +1020,93 @@ export class StorageService {
     this.saveCommissionPayables(payables);
   }
 
+  static getCommissionPayableById(payableId: string): CommissionPayable | undefined {
+    return this.getCommissionPayables().find((p) => p.id === payableId);
+  }
+
+  static holdCommissionPayable(payableId: string, reason: string) {
+    this.setPayableHold(payableId, true, reason, this.getCurrentUser());
+  }
+
+  static releaseCommissionPayable(payableId: string, reason: string) {
+    this.setPayableHold(payableId, false, reason, this.getCurrentUser());
+  }
+
+  static addCommissionAdjustment(payableId: string, adjustment: CommissionAdjustment) {
+    this.addAdjustmentToPayable(
+      payableId,
+      {
+        type: adjustment.type,
+        amount: adjustment.amount,
+        reason: adjustment.reason || adjustment.description || "Manual adjustment",
+        description: adjustment.description || adjustment.reason,
+        adjustedBy: adjustment.adjustedBy || adjustment.appliedBy || this.getCurrentUser().name,
+        appliedBy: adjustment.appliedBy || adjustment.adjustedBy || this.getCurrentUser().name,
+      },
+      this.getCurrentUser()
+    );
+  }
+
+  static calculateCommission(params: {
+    loanAmount: number;
+    product: string;
+    dsaId?: string;
+    branchId?: string;
+    disbursalDate?: string;
+  }): {
+    appliedRuleId: string;
+    appliedRuleName: string;
+    appliedRuleVersion: number;
+    appliedRatePercentage: number;
+    grossCommission: number;
+    tdsAmount: number;
+    netCommission: number;
+    priority: number;
+    ruleType: string;
+  } {
+    const rules = this.getCommissionRules();
+    const match = matchCommissionRule(
+      rules,
+      params.dsaId,
+      params.product,
+      params.loanAmount,
+      params.branchId
+    );
+
+    const rule = match.rule || {
+      id: "RULE-DEFAULT",
+      name: "Global Fallback Tier",
+      version: 1,
+      commissionPercentage: 1.0,
+      ruleType: "GLOBAL",
+    };
+
+    const rate = rule.commissionPercentage;
+    const gross = Math.round((params.loanAmount * rate) / 100);
+    const tds = Math.round(gross * 0.05); // 5% TDS under Sec 194H
+    const net = gross - tds;
+
+    return {
+      appliedRuleId: rule.id,
+      appliedRuleName: rule.name,
+      appliedRuleVersion: rule.version,
+      appliedRatePercentage: rate,
+      grossCommission: gross,
+      tdsAmount: tds,
+      netCommission: net,
+      priority: match.rule?.priority || (match.rule?.ruleType === "DSA_SPECIFIC" ? 1 : match.rule?.ruleType === "BRANCH_SPECIFIC" ? 2 : match.rule?.ruleType === "PRODUCT_SPECIFIC" ? 3 : 4),
+      ruleType: rule.ruleType,
+    };
+  }
+
+  static generatePaymentFromCommissionPayable(payableId: string): string {
+    const res = this.generatePaymentFromPayable(payableId, this.getCurrentUser());
+    if (!res.success || !res.payment) {
+      throw new Error(res.error || "Failed to generate Phase 1 payment request.");
+    }
+    return res.payment.id;
+  }
+
   // ==========================================================================
   // PHASE 2 → PHASE 1 PAYMENT GENERATION ENGINE INTEGRATION
   // ==========================================================================
@@ -1170,11 +1257,11 @@ export class StorageService {
     };
 
     // Execute AI Optical Verification on new payment
-    const aiResult = AIVerificationService.verifyPaymentLocally(newPayment);
+    const aiResult = AIVerificationService.getLocalVerificationFallback(newPayment);
     newPayment.aiVerification = aiResult;
 
     // Save Payment in Phase 1 engine
-    this.addPayment(newPayment);
+    this.createPayment(newPayment);
 
     // Update Commission Payable status
     payable.status = "PAYMENT_GENERATED";

@@ -111,8 +111,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
               <span className="font-extrabold text-sm md:text-base tracking-tight text-white">
                 MGM Payment Operations
               </span>
-              <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider bg-purple-500/20 text-purple-200 border border-purple-400/30">
-                PHASE 1
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider bg-gradient-to-r from-purple-500/25 to-blue-500/25 text-purple-200 border border-purple-400/40">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                PHASE 1 &amp; 2 • DSA AUTOMATION
               </span>
             </div>
             <p className="text-[11px] text-white/50 font-medium hidden md:block">

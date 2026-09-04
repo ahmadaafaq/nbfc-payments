@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   CreditCard,
@@ -16,6 +16,12 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  Users,
+  Percent,
+  FileText,
+  Printer,
+  TrendingUp,
+  Sliders,
 } from "lucide-react";
 import { StorageService } from "../../services/storageService";
 
@@ -49,7 +55,28 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
 }) => {
   const currentUser = StorageService.getCurrentUser();
 
-  const navItems: NavItem[] = [
+  const phase2Views = [
+    "dsa-master",
+    "commission-rules",
+    "disbursals",
+    "commission-payables",
+    "payout-statements",
+    "commission-analytics",
+  ];
+
+  const [selectedPhase, setSelectedPhase] = useState<"PHASE_1" | "PHASE_2">(
+    phase2Views.includes(currentView) ? "PHASE_2" : "PHASE_1"
+  );
+
+  useEffect(() => {
+    if (phase2Views.includes(currentView)) {
+      setSelectedPhase("PHASE_2");
+    } else {
+      setSelectedPhase("PHASE_1");
+    }
+  }, [currentView]);
+
+  const phase1Items: NavItem[] = [
     {
       id: "dashboard",
       label: "Dashboard",
@@ -101,6 +128,43 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     },
   ];
 
+  const phase2Items: NavItem[] = [
+    {
+      id: "dsa-master",
+      label: "DSA Channel Partners",
+      icon: Users,
+    },
+    {
+      id: "commission-rules",
+      label: "Commission Schemes",
+      icon: Percent,
+    },
+    {
+      id: "disbursals",
+      label: "Disbursals & Upload",
+      icon: FileText,
+    },
+    {
+      id: "commission-payables",
+      label: "Payables & Hold Desk",
+      icon: CreditCard,
+      badge: "Auto TDS",
+      badgeColor: "bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 font-bold dark:border-emerald-400/30",
+    },
+    {
+      id: "payout-statements",
+      label: "Payout Statements",
+      icon: Printer,
+    },
+    {
+      id: "commission-analytics",
+      label: "Commission Analytics",
+      icon: TrendingUp,
+    },
+  ];
+
+  const activeNavItems = selectedPhase === "PHASE_1" ? phase1Items : phase2Items;
+
   const handleItemClick = (id: string) => {
     onNavigate(id);
     setIsMobileOpen(false);
@@ -133,7 +197,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             <div className="hidden lg:flex items-center justify-between pb-1">
               {!isCollapsed && (
                 <span className="text-[11px] uppercase tracking-wider text-slate-600 dark:text-white/50 font-black px-2">
-                  Workspace
+                  MGM Workspace
                 </span>
               )}
               <button
@@ -153,8 +217,52 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
           )}
 
-          {/* Quick Primary Action: Create Payment */}
-          {isMaker && (
+          {/* Phase 1 vs Phase 2 Mode Toggle */}
+          {!isCollapsed ? (
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-200/80 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-[11px] font-bold">
+              <button
+                onClick={() => {
+                  setSelectedPhase("PHASE_1");
+                  if (phase2Views.includes(currentView)) onNavigate("dashboard");
+                }}
+                className={`py-1.5 px-2 rounded-lg text-center transition ${
+                  selectedPhase === "PHASE_1"
+                    ? "bg-purple-600 text-white shadow-sm font-black"
+                    : "text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                Phase 1: Ops
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedPhase("PHASE_2");
+                  if (!phase2Views.includes(currentView)) onNavigate("dsa-master");
+                }}
+                className={`py-1.5 px-2 rounded-lg text-center transition ${
+                  selectedPhase === "PHASE_2"
+                    ? "bg-purple-600 text-white shadow-sm font-black"
+                    : "text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                Phase 2: DSA
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                const nextPhase = selectedPhase === "PHASE_1" ? "PHASE_2" : "PHASE_1";
+                setSelectedPhase(nextPhase);
+                onNavigate(nextPhase === "PHASE_1" ? "dashboard" : "dsa-master");
+              }}
+              title={`Switch to ${selectedPhase === "PHASE_1" ? "Phase 2: DSA Commission" : "Phase 1: Payment Ops"}`}
+              className="w-full py-1.5 rounded-lg text-[10px] font-black bg-purple-600 text-white text-center shadow"
+            >
+              {selectedPhase === "PHASE_1" ? "P1" : "P2"}
+            </button>
+          )}
+
+          {/* Primary Action Button */}
+          {selectedPhase === "PHASE_1" && isMaker && (
             <button
               id="sidebar-create-payment-btn"
               onClick={() => handleItemClick("create-payment")}
@@ -172,14 +280,27 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </button>
           )}
 
-          {/* Mobile section header */}
-          <div className="lg:hidden text-[10px] uppercase tracking-widest text-slate-500 dark:text-white/40 font-extrabold px-2 pt-1">
-            Workspace
-          </div>
+          {selectedPhase === "PHASE_2" && (
+            <button
+              id="sidebar-disbursals-btn"
+              onClick={() => handleItemClick("disbursals")}
+              title="Record Disbursal"
+              className={`w-full flex items-center justify-center gap-2 rounded-xl text-xs font-semibold transition-all shadow-md border active:scale-95 ${
+                isCollapsed ? "py-2.5 px-2" : "py-2.5 px-4"
+              } ${
+                currentView === "disbursals"
+                  ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white border-white/30 shadow-purple-900/50 ring-2 ring-purple-400/40"
+                  : "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white border-white/20 shadow-purple-900/30"
+              }`}
+            >
+              <FileText className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="truncate">Record Disbursal</span>}
+            </button>
+          )}
 
           {/* Nav List */}
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {activeNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentView === item.id;
 
@@ -271,3 +392,4 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     </>
   );
 };
+

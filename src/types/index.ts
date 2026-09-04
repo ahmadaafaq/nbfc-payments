@@ -345,7 +345,27 @@ export interface DSAPartner {
   bankAuditHistory?: DSABankAuditRecord[];
 }
 
-export type CommissionRuleType = "GLOBAL" | "PRODUCT_SPECIFIC" | "DSA_SPECIFIC" | "BRANCH_SPECIFIC";
+export type LoanProductType =
+  | "BUSINESS_LOAN"
+  | "PERSONAL_LOAN"
+  | "LOAN_AGAINST_PROPERTY"
+  | "MICRO_ENTERPRISE_LOAN"
+  | "USED_CAR_LOAN"
+  | "HOME_LOAN";
+
+export interface CommissionSlab {
+  minAmount: number;
+  maxAmount: number;
+  commissionPercentage: number;
+  ratePercentage?: number;
+}
+
+export type CommissionRuleType =
+  | "DSA_SPECIFIC"
+  | "BRANCH_SPECIFIC"
+  | "PRODUCT_SPECIFIC"
+  | "GLOBAL_FALLBACK"
+  | "GLOBAL";
 
 export interface CommissionRuleVersion {
   id: string;
@@ -367,18 +387,23 @@ export interface CommissionRule {
   dsaName?: string;
   branchId?: string; // If branch-specific
   branchName?: string;
-  slabMin: number; // in INR e.g. 100000
-  slabMax: number; // in INR e.g. 500000 (or Infinity)
-  commissionPercentage: number; // e.g. 1.25
+  slabMin?: number; // in INR e.g. 100000
+  slabMax?: number; // in INR e.g. 500000 (or Infinity)
+  commissionPercentage?: number; // e.g. 1.25
   ruleType: CommissionRuleType;
+  priority?: number;
+  slabs?: CommissionSlab[];
   effectiveFrom: string; // YYYY-MM-DD
   effectiveUntil?: string; // YYYY-MM-DD
+  effectiveTo?: string; // YYYY-MM-DD (alias)
   version: number; // 1, 2, 3...
+  changeReason?: string;
   status: "ACTIVE" | "INACTIVE" | "EXPIRED";
-  createdBy: string;
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
   versions?: CommissionRuleVersion[];
+  versionHistory?: any[];
 }
 
 export type DisbursalStatus =
@@ -399,35 +424,50 @@ export interface Disbursal {
   product: string;
   dsaId: string;
   dsaName: string;
+  dsaCode?: string;
   customerReference: string;
   disbursalAmount: number;
-  loanReference: string;
+  loanReference?: string;
   status: DisbursalStatus;
   
   // Rule metadata locked in during calculation
   applicableRuleId?: string;
   applicableRuleName?: string;
   applicableRuleVersion?: number;
+  commissionRuleId?: string;
+  commissionRuleVersion?: number;
   commissionRate?: number;
+  commissionRatePercentage?: number;
   grossCommission?: number;
   netCommission?: number;
+  tdsAmount?: number;
   
   duplicateOfFileId?: string;
   notes?: string;
-  createdBy: string;
+  createdBy?: string;
   createdAt: string;
   supportingDocumentUrl?: string;
 }
 
-export type AdjustmentType = "TDS" | "RECOVERY" | "ADVANCE_ADJUSTMENT" | "MANUAL_ADJUSTMENT" | "OTHER";
+export type AdjustmentType =
+  | "TDS"
+  | "RECOVERY"
+  | "ADVANCE_ADJUSTMENT"
+  | "BONUS"
+  | "MANUAL_DEDUCTION"
+  | "MANUAL_ADJUSTMENT"
+  | "OTHER";
 
 export interface CommissionAdjustment {
   id: string;
   type: AdjustmentType;
   amount: number; // in INR (reduction if positive, addition if negative)
-  reason: string;
-  adjustedBy: string;
-  adjustedAt: string;
+  reason?: string;
+  description?: string;
+  adjustedBy?: string;
+  appliedBy?: string;
+  adjustedAt?: string;
+  appliedAt?: string;
 }
 
 export type CommissionPayableStatus =
@@ -438,19 +478,21 @@ export type CommissionPayableStatus =
   | "PENDING_CHECKER"
   | "APPROVED"
   | "PAID"
+  | "DISBURSED"
   | "REJECTED";
 
 export interface CommissionPayable {
   id: string; // e.g. CP-00182
-  disbursalId: string;
+  disbursalId?: string;
   fileId: string;
   applicationId?: string;
   dsaId: string;
   dsaName: string;
-  dsaAccountNumber: string;
-  dsaIfsc: string;
-  dsaBankName: string;
-  dsaAccountHolderName: string;
+  dsaCode?: string;
+  dsaAccountNumber?: string;
+  dsaIfsc?: string;
+  dsaBankName?: string;
+  dsaAccountHolderName?: string;
   branchId: string;
   branchName: string;
   product: string;
@@ -460,13 +502,15 @@ export interface CommissionPayable {
   
   // Commission calculation breakdown
   commissionRuleId: string;
-  commissionRuleName: string;
+  commissionRuleName?: string;
   commissionRuleVersion: number;
-  commissionRate: number; // e.g. 1.50%
+  commissionRate?: number; // e.g. 1.50%
+  appliedRatePercentage?: number;
   grossCommission: number; // e.g. 12000
+  tdsAmount?: number;
   
   adjustments: CommissionAdjustment[];
-  totalAdjustments: number; // sum of adjustments (e.g. 500)
+  totalAdjustments?: number; // sum of adjustments (e.g. 500)
   netPayable: number; // e.g. 11500
   
   status: CommissionPayableStatus;
@@ -475,8 +519,8 @@ export interface CommissionPayable {
   holdSetAt?: string;
   
   paymentId?: string; // Linked Phase 1 Payment ID (e.g. PAY-20260903-0042)
-  calculatedAt: string;
-  calculatedBy: string;
+  calculatedAt?: string;
+  calculatedBy?: string;
   auditTrail: AuditLogEntry[];
 }
 
