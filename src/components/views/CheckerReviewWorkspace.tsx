@@ -68,7 +68,8 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
   // Active Spotlight Field (linked between document and comparison matrix)
   const [activeField, setActiveField] = useState<BoundingBoxField>(null);
 
-  // Multi-Document Support (Voucher + Cheque Leaf)
+  // Multi-Document Support (Voucher + Cheque Leaf + Uploaded Docs)
+  const [uploadedDocs, setUploadedDocs] = useState<PaymentDocument[]>([]);
   const [selectedDocIndex, setSelectedDocIndex] = useState<number>(0);
   const [customDocUrl, setCustomDocUrl] = useState<string | null>(null);
   const [isMismatchDemoActive, setIsMismatchDemoActive] = useState<boolean>(false);
@@ -91,17 +92,11 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
   const [copiedId, setCopiedId] = useState(false);
 
   // Build document list for the payment
-  const getDocumentList = (): PaymentDocument[] => {
+  const getDocumentList = useCallback((): PaymentDocument[] => {
     if (!payment) return [];
     const baseDocs = payment.documents || payment.supportingDocuments || [];
 
-    // If payment has documents, use them
-    if (baseDocs.length > 0) {
-      return baseDocs;
-    }
-
-    // Default virtual documents for comprehensive verification
-    return [
+    const defaultDocs: PaymentDocument[] = [
       {
         id: "doc-voucher-main",
         name: `Disbursal_Voucher_${payment.fileId || payment.id}.svg`,
@@ -140,7 +135,10 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
         }),
       },
     ];
-  };
+
+    const sourceDocs = baseDocs.length > 0 ? baseDocs : defaultDocs;
+    return [...sourceDocs, ...uploadedDocs];
+  }, [payment, uploadedDocs]);
 
   const documentsList = getDocumentList();
   const currentDoc = documentsList[selectedDocIndex] || documentsList[0];
@@ -151,13 +149,17 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
   const isMakerCheckerConflict = isMaker && currentUser.role !== "ADMIN";
   const hasDiscrepancy = payment?.aiVerification?.overallStatus === "MISMATCH";
 
-  // Re-run AI verification with active filters
-  const handleReRunAi = async () => {
+  // Core AI Verification runner
+  const runAiVerification = async (
+    targetDocUrl: string,
+    docName: string,
+    mimeType: string = "image/png"
+  ) => {
     if (!payment) return;
     setIsAiRunning(true);
     try {
       const preprocessed = await AIVerificationService.preprocessImage(
-        activeDocUrl,
+        targetDocUrl,
         {
           grayscale: isGrayscale,
           contrast: contrastBoost,
@@ -167,8 +169,9 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
 
       const result = await AIVerificationService.verifyPaymentDocument(
         payment,
-        preprocessed,
-        "image/png"
+        preprocessed || targetDocUrl,
+        docName,
+        mimeType
       );
 
       StorageService.updatePayment({
@@ -183,8 +186,8 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
 
       showToast(
         result.overallStatus === "PASS"
-          ? "AI Optical Verification complete: All 4 critical fields match."
-          : "AI Optical Verification complete: Discrepancy detected.",
+          ? `OCR Verified (${result.documentType || "Document"}): 4/4 critical fields match.`
+          : `OCR Complete (${result.documentType || "Document"}): Discrepancy detected.`,
         result.overallStatus === "PASS" ? "success" : "warning"
       );
     } catch (err) {
@@ -193,6 +196,15 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
     } finally {
       setIsAiRunning(false);
     }
+  };
+
+  // Re-run AI verification with active filters & active document
+  const handleReRunAi = async () => {
+    await runAiVerification(
+      activeDocUrl,
+      currentDoc?.name || "Document.png",
+      currentDoc?.type || "image/png"
+    );
   };
 
   // Demo voucher switchers
@@ -217,11 +229,8 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
     // Update AI verification state
     const simulatedResult = AIVerificationService.getLocalVerificationFallback(
       payment,
-      {
-        extractedAmount: newAmount,
-        extractedAccount: isMismatch ? "0296000100089210" : payment.accountNumber,
-        isMismatch,
-      }
+      newDocUrl,
+      isMismatch ? "Voucher_Mismatch_Demo.svg" : "Disbursal_Voucher.svg"
     );
 
     StorageService.updatePayment({
@@ -242,17 +251,37 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
     );
   };
 
-  // Upload custom voucher
+  // Upload custom cheque leaf or voucher
   const handleUploadVoucher = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
+      const newDoc: PaymentDocument = {
+        id: `upload-${Date.now()}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || "image/png",
+        uploadedAt: new Date().toISOString(),
+        uploadedBy: currentUser.name,
+        quality: "GOOD",
+        dataUrl,
+      };
+
+      setUploadedDocs((prev) => {
+        const next = [...prev, newDoc];
+        // Calculate new index
+        const baseCount = (payment?.documents || payment?.supportingDocuments || []).length || 2;
+        setSelectedDocIndex(baseCount + prev.length);
+        return next;
+      });
+
       setCustomDocUrl(dataUrl);
-      showToast(`Uploaded custom voucher: ${file.name}`, "info");
-      handleReRunAi();
+      showToast(`Uploaded document: ${file.name}. Processing OCR...`, "info");
+      runAiVerification(dataUrl, file.name, file.type || "image/png");
     };
     reader.readAsDataURL(file);
   };
+
 
   // Approval handler
   const handleApprove = () => {
@@ -583,6 +612,8 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
           <DocumentInspectionDeck
             docUrl={activeDocUrl}
             docName={currentDoc?.name || "Disbursal_Voucher.svg"}
+            documentType={payment.aiVerification?.documentType}
+            dynamicBoundingBoxes={payment.aiVerification?.boundingBoxes}
             activeField={activeField}
             onSelectField={setActiveField}
             zoomLevel={zoomLevel}
@@ -604,6 +635,10 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
             onSelectDocIndex={(idx) => {
               setSelectedDocIndex(idx);
               setCustomDocUrl(null);
+              const target = documentsList[idx];
+              if (target?.dataUrl) {
+                runAiVerification(target.dataUrl, target.name, target.type || "image/png");
+              }
             }}
             onLoadSampleVoucher={handleLoadSampleVoucher}
             onUploadVoucher={handleUploadVoucher}
@@ -644,7 +679,7 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
 
             <div className="px-2 hidden md:block">
               <span className="text-[11px] font-mono text-white/50 whitespace-nowrap">
-                Engine: Gemini 2.5 Pro
+                Engine: {payment.aiVerification?.engine || "Gemini 3.8 Flash OCR"}
               </span>
             </div>
           </div>

@@ -95,6 +95,15 @@ export interface PaymentDocument {
   notes?: string;
 }
 
+export interface BoundingBoxCoordinates {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label?: string;
+  tag?: string;
+}
+
 export interface ExtractedFieldDetail {
   extracted: string | number | null;
   matched: boolean;
@@ -102,11 +111,13 @@ export interface ExtractedFieldDetail {
   readability: ReadabilityStatus;
   difference?: number | null;
   notes: string;
+  box?: BoundingBoxCoordinates;
 }
 
 export interface AIVerificationResult {
-  engine: "gemini-3.8-flash" | "calibrated-heuristic-engine";
+  engine: "gemini-3.8-flash" | "calibrated-heuristic-engine" | "client-vision-ocr";
   verifiedAt: string;
+  documentType?: "CHEQUE" | "VOUCHER" | "SANCTION_NOTE" | "GENERIC";
   documentQuality: DocumentQuality;
   overallStatus: AIOverallStatus;
   overallConfidence: ConfidenceLevel;
@@ -119,7 +130,13 @@ export interface AIVerificationResult {
     ifsc: ExtractedFieldDetail;
     amount: ExtractedFieldDetail;
     bankName: ExtractedFieldDetail;
+    date?: ExtractedFieldDetail;
+    chequeNumber?: ExtractedFieldDetail;
   };
+  boundingBoxes?: Record<
+    string,
+    { x: number; y: number; w: number; h: number; label: string; tag: string }
+  >;
   discrepancies: string[];
   warnings: string[];
 }

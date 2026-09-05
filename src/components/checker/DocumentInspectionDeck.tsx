@@ -12,7 +12,6 @@ import {
   Layers,
   Sparkles,
   Upload,
-  Eye,
   Crosshair,
   CheckCircle2,
   ShieldCheck,
@@ -20,6 +19,10 @@ import {
   FileType,
 } from "lucide-react";
 import { PaymentDocument } from "../../types";
+import {
+  CHEQUE_DEFAULT_BOXES,
+  VOUCHER_DEFAULT_BOXES,
+} from "../../services/aiVerificationService";
 
 export type BoundingBoxField =
   | "beneficiary"
@@ -35,6 +38,11 @@ export type BoundingBoxField =
 interface DocumentInspectionDeckProps {
   docUrl: string;
   docName: string;
+  documentType?: "CHEQUE" | "VOUCHER" | "SANCTION_NOTE" | "GENERIC";
+  dynamicBoundingBoxes?: Record<
+    string,
+    { x: number; y: number; w: number; h: number; label: string; tag: string }
+  >;
   activeField: BoundingBoxField;
   onSelectField: (field: BoundingBoxField) => void;
   zoomLevel: number;
@@ -59,23 +67,11 @@ interface DocumentInspectionDeckProps {
   isMismatchDemoActive?: boolean;
 }
 
-// Bounding box percentages for the Disbursal Voucher (relative to 800x1050 SVG canvas)
-const VOUCHER_BOUNDING_BOXES: Record<
-  string,
-  { x: number; y: number; w: number; h: number; label: string; tag: string }
-> = {
-  voucherNo: { x: 72, y: 7.2, w: 22, h: 4.8, label: "Voucher Reference", tag: "VOUCHER #" },
-  beneficiary: { x: 7.5, y: 28.5, w: 85, h: 4.8, label: "Beneficiary Name", tag: "BENEFICIARY" },
-  accountNumber: { x: 7.5, y: 34, w: 85, h: 4.8, label: "Account Number", tag: "ACCOUNT NO" },
-  ifsc: { x: 7.5, y: 39.2, w: 45, h: 4.8, label: "IFSC Code", tag: "IFSC" },
-  bankName: { x: 53.5, y: 39.2, w: 39, h: 4.8, label: "Bank Name", tag: "BANK" },
-  amount: { x: 6, y: 49.2, w: 88, h: 8.5, label: "Net Payable Amount", tag: "NET AMOUNT (₹)" },
-  stamp: { x: 37, y: 79.5, w: 16, h: 10.5, label: "Official MGM Physical Seal", tag: "OFFICIAL SEAL" },
-};
-
 export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
   docUrl,
   docName,
+  documentType,
+  dynamicBoundingBoxes,
   activeField,
   onSelectField,
   zoomLevel,
@@ -105,6 +101,22 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
   const [startPan, setStartPan] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+
+  // Determine effective document type & bounding boxes
+  const isCheque =
+    documentType === "CHEQUE" ||
+    docName?.toLowerCase().includes("cheque") ||
+    docName?.toLowerCase().includes("chk");
+
+  const effectiveBoxes: Record<
+    string,
+    { x: number; y: number; w: number; h: number; label: string; tag: string }
+  > =
+    dynamicBoundingBoxes && Object.keys(dynamicBoundingBoxes).length > 0
+      ? dynamicBoundingBoxes
+      : isCheque
+      ? CHEQUE_DEFAULT_BOXES
+      : VOUCHER_DEFAULT_BOXES;
 
   // Lock body scroll and listen for Escape key when in fullscreen
   useEffect(() => {
@@ -163,6 +175,10 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       onUploadVoucher(file);
+      // Reset input value so same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -188,11 +204,11 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3" />
-                <span>CTS-2010 / 300 DPI</span>
+                <span>{isCheque ? "CTS-2010 Cheque Leaf" : "MGM Disbursal Voucher"}</span>
               </span>
             </div>
             <p className="text-[11px] text-white/50 truncate max-w-[280px]">
-              {docName || "Disbursal_Voucher_MGM.svg"}
+              {docName || (isCheque ? "Cancelled_Cheque.svg" : "Disbursal_Voucher_MGM.svg")}
             </p>
           </div>
         </div>
@@ -295,7 +311,7 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
             ))
           ) : (
             <div className="px-3 py-1 rounded-xl bg-purple-600 text-white text-xs font-semibold">
-              Primary Disbursement Voucher
+              Primary Disbursement Document
             </div>
           )}
         </div>
@@ -306,7 +322,7 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
             type="file"
             ref={fileInputRef}
             onChange={handleFileChange}
-            accept="image/*,.pdf"
+            accept="image/*,.pdf,.svg"
             className="hidden"
           />
 
@@ -314,11 +330,11 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
             id="btn-upload-voucher-trigger"
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-2.5 py-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-[11px] font-semibold flex items-center gap-1.5 transition"
-            title="Upload custom voucher slip"
+            className="px-2.5 py-1.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-[11px] font-semibold flex items-center gap-1.5 transition shadow-sm hover:border-purple-400/50"
+            title="Upload cheque leaf or voucher image"
           >
             <Upload className="w-3 h-3 text-purple-300" />
-            <span>Upload Slip</span>
+            <span>Upload Document / Cheque</span>
           </button>
 
           {/* Preset Demo Vouchers for Checker Verification testing */}
@@ -390,14 +406,20 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
               onChange={(e) => setContrastBoost(parseFloat(e.target.value))}
               className="w-16 accent-purple-600 h-1.5 bg-slate-200 dark:bg-white/20 rounded-lg cursor-pointer"
             />
-            <span className="font-mono text-[10px] text-purple-700 dark:text-purple-300 font-bold">{contrastBoost.toFixed(1)}x</span>
+            <span className="font-mono text-[10px] text-purple-700 dark:text-purple-300 font-bold">
+              {contrastBoost.toFixed(1)}x
+            </span>
           </div>
         </div>
 
         {/* Optical Bounding Box Toggle */}
         <div className="flex items-center gap-2">
           <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-white/80 hover:text-slate-950 dark:hover:text-white transition">
-            <Crosshair className={`w-3.5 h-3.5 ${showBoundingBoxes ? "text-purple-600 dark:text-purple-400" : "text-slate-400 dark:text-white/40"}`} />
+            <Crosshair
+              className={`w-3.5 h-3.5 ${
+                showBoundingBoxes ? "text-purple-600 dark:text-purple-400" : "text-slate-400 dark:text-white/40"
+              }`}
+            />
             <span className="text-[11px] font-bold">Optical OCR Spotlight</span>
             <input
               type="checkbox"
@@ -433,7 +455,7 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
         {activeField && (
           <div className="absolute top-3 right-3 z-20 px-3 py-1.5 rounded-xl bg-purple-600/90 border border-purple-400/40 text-white text-xs font-bold shadow-lg flex items-center gap-1.5 backdrop-blur-md animate-in fade-in zoom-in-95">
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>Spotlight: {VOUCHER_BOUNDING_BOXES[activeField]?.label || activeField}</span>
+            <span>Spotlight: {effectiveBoxes[activeField]?.label || activeField}</span>
           </div>
         )}
 
@@ -453,7 +475,7 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
           <div className="relative inline-block shadow-2xl rounded-lg overflow-hidden border border-white/20">
             <img
               src={docUrl}
-              alt="Disbursement Voucher"
+              alt="Disbursement Document"
               draggable={false}
               className="max-h-[460px] w-auto select-none pointer-events-none block"
             />
@@ -461,7 +483,7 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
             {/* Interactive Optical Bounding Boxes Overlay */}
             {showBoundingBoxes && (
               <div className="absolute inset-0 z-10 pointer-events-auto">
-                {Object.entries(VOUCHER_BOUNDING_BOXES).map(([fieldKey, box]) => {
+                {Object.entries(effectiveBoxes).map(([fieldKey, box]) => {
                   const isHighlighted = activeField === fieldKey;
                   return (
                     <div
@@ -509,7 +531,7 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 text-emerald-400 font-medium">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>MGM Hologram &amp; Official Seal Verified</span>
+            <span>{isCheque ? "CTS MICR Band & Security Fibres Verified" : "MGM Hologram & Official Seal Verified"}</span>
           </span>
           <span>•</span>
           <span>Pan: ({panPosition.x}px, {panPosition.y}px)</span>
