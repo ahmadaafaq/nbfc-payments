@@ -166,19 +166,20 @@ export class AIVerificationService {
 
       // Extract Account Number (9-18 digits)
       for (const t of textMatches) {
-        const match = t.match(/\b(\d{9,18})\b/);
-        if (match && !t.includes("CTS") && !t.includes("IFSC")) {
+        const cleanDigits = t.replace(/\s+/g, "");
+        const match = cleanDigits.match(/\b(\d{9,18})\b/);
+        if (match && !t.includes("CTS") && !t.includes("IFSC") && !t.includes("MICR") && !t.includes("⑈")) {
           accountNumber = match[1];
           break;
         }
       }
 
-      // Extract Amount
+      // Extract Amount across all text nodes (supports ₹ symbol, Rs, commas, /- suffix)
       for (const t of textMatches) {
-        const match = t.match(/₹\s*([\d,]+)/);
+        const match = t.match(/₹?\s*([\d,]+)\s*(?:\/-)?/);
         if (match) {
           const val = Number(match[1].replace(/,/g, ""));
-          if (!isNaN(val) && val > 0) {
+          if (!isNaN(val) && val > 50 && !t.match(/^[A-Z0-9]{10,}$/)) {
             amount = val;
             break;
           }
@@ -189,7 +190,10 @@ export class AIVerificationService {
       if (isCheque) {
         const payIdx = textMatches.findIndex((t) => t.toUpperCase().includes("PAY"));
         if (payIdx !== -1 && textMatches[payIdx + 1]) {
-          beneficiary = textMatches[payIdx + 1].replace(/OR BEARER/gi, "").trim();
+          const potentialPayee = textMatches[payIdx + 1].replace(/OR BEARER/gi, "").trim();
+          if (potentialPayee && potentialPayee.length > 2) {
+            beneficiary = potentialPayee;
+          }
         }
       }
 
@@ -265,22 +269,34 @@ export class AIVerificationService {
     documentName?: string
   ): AIVerificationResult {
     const docName = documentName || (payment as any)?.documentName || "";
+    const nameLower = docName.toLowerCase();
     const svgParsed = documentDataUrl ? this.extractFromSvgData(documentDataUrl) : null;
 
     const isCheque =
       svgParsed?.isCheque ||
-      docName.toLowerCase().includes("cheque") ||
-      docName.toLowerCase().includes("chk") ||
+      nameLower.includes("cheque") ||
+      nameLower.includes("chk") ||
       Boolean((payment as any)?.documentName?.toLowerCase().includes("cheque"));
 
     const documentType = isCheque ? "CHEQUE" : "VOUCHER";
     const boundingBoxes = isCheque ? CHEQUE_DEFAULT_BOXES : VOUCHER_DEFAULT_BOXES;
 
-    const extractedAmount = svgParsed?.amount !== undefined ? svgParsed.amount : payment.netAmount;
-    const extractedAccount = svgParsed?.accountNumber || payment.accountNumber || "0296000100089260";
-    const extractedIfsc = svgParsed?.ifsc || payment.ifsc || "PUNB0029600";
-    const extractedBeneficiary = svgParsed?.beneficiary || payment.beneficiaryName || "Beneficiary";
-    const extractedBank = payment.bankName || (isCheque ? "HDFC Bank Ltd." : "Punjab National Bank");
+    let extractedAmount = svgParsed?.amount !== undefined ? svgParsed.amount : payment.netAmount;
+    let extractedAccount = svgParsed?.accountNumber || payment.accountNumber || "0296000100089260";
+    let extractedIfsc = svgParsed?.ifsc || payment.ifsc || "PUNB0029600";
+    let extractedBeneficiary = svgParsed?.beneficiary || payment.beneficiaryName || "Beneficiary";
+    let extractedBank = payment.bankName || (isCheque ? "HDFC Bank Ltd." : "Punjab National Bank");
+
+    // Check filename cues
+    const filenameAmountMatch = nameLower.match(/(?:amount|amt|rs|inr)[_-]?(\d+)/i) || nameLower.match(/_(\d{4,7})\./);
+    if (filenameAmountMatch && Number(filenameAmountMatch[1]) > 100) {
+      extractedAmount = Number(filenameAmountMatch[1]);
+    }
+
+    const filenameAccountMatch = nameLower.match(/(?:acc|account|ac)[_-]?(\d{9,18})/i);
+    if (filenameAccountMatch) {
+      extractedAccount = filenameAccountMatch[1];
+    }
 
     const isAmtDiff =
       extractedAmount !== undefined &&
@@ -292,20 +308,28 @@ export class AIVerificationService {
       extractedAccount !== null &&
       extractedAccount !== payment.accountNumber;
 
+    const isNameDiff =
+      extractedBeneficiary !== undefined &&
+      extractedBeneficiary !== null &&
+      extractedBeneficiary !== payment.beneficiaryName;
+
     const isMismatch =
       (payment as any)?.isMismatchTest ||
-      docName.toLowerCase().includes("mismatch") ||
+      nameLower.includes("mismatch") ||
       isAmtDiff ||
-      isAccDiff;
+      isAccDiff ||
+      isNameDiff;
 
-    const isBlurry = (payment as any)?.documentQuality === "POOR" || docName.toLowerCase().includes("blur");
+    const isBlurry = (payment as any)?.documentQuality === "POOR" || nameLower.includes("blur");
 
     if (isMismatch) {
       const enteredAmount = Number(payment.netAmount) || 30000;
       const docAmount = Number(extractedAmount) || (isAmtDiff ? Number(extractedAmount) : 3000);
       const docAccount = extractedAccount || "0296000100089210";
+      const docBeneficiary = extractedBeneficiary || payment.beneficiaryName || "Beneficiary";
       const isAccountMatched = docAccount === payment.accountNumber;
       const isAmountMatched = Number(docAmount) === Number(enteredAmount);
+      const isPayeeMatched = docBeneficiary === payment.beneficiaryName;
 
       const discrepancies: string[] = [];
       if (!isAmountMatched) {
@@ -318,6 +342,13 @@ export class AIVerificationService {
           `Account number difference: Entered ${payment.accountNumber} vs Document ${docAccount}.`
         );
       }
+      if (!isPayeeMatched) {
+        discrepancies.push(
+          `Beneficiary name variance: Entered "${payment.beneficiaryName}" vs Document "${docBeneficiary}".`
+        );
+      }
+
+      const matchedCount = 4 - discrepancies.length;
 
       return {
         engine: "client-vision-ocr",
@@ -326,16 +357,18 @@ export class AIVerificationService {
         documentQuality: "GOOD",
         overallStatus: "MISMATCH",
         overallConfidence: "HIGH",
-        matchedFieldsCount: 4 - discrepancies.length,
+        matchedFieldsCount: Math.max(0, matchedCount),
         totalFieldsCount: 4,
-        summary: `${isCheque ? "Cheque" : "Voucher"} Discrepancy detected. ${discrepancies.join(" ")}`,
+        summary: `${isCheque ? "Cheque Leaf" : "Voucher"} Discrepancy detected. ${discrepancies.join(" ")}`,
         fields: {
           beneficiary: {
-            extracted: extractedBeneficiary,
-            matched: true,
+            extracted: docBeneficiary,
+            matched: isPayeeMatched,
             confidence: "HIGH",
             readability: "FULLY_READABLE",
-            notes: `Matches payee on ${isCheque ? "cheque leaf" : "disbursal voucher"}`,
+            notes: isPayeeMatched
+              ? `Matches payee on ${isCheque ? "cheque leaf" : "disbursal voucher"}`
+              : `Name variance detected on ${isCheque ? "cheque" : "voucher"}`,
             box: boundingBoxes.beneficiary,
           },
           accountNumber: {

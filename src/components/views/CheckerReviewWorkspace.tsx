@@ -694,6 +694,8 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
                 onHoverField={setActiveField}
                 onReRunAi={handleReRunAi}
                 isAiRunning={isAiRunning}
+                currentDocName={currentDoc?.name}
+                documentType={payment.aiVerification?.documentType}
               />
 
               <CheckerActionDeck

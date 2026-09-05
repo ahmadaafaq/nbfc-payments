@@ -29,6 +29,8 @@ interface ReconciliationMatrixProps {
   onHoverField: (field: BoundingBoxField) => void;
   onReRunAi: () => void;
   isAiRunning: boolean;
+  currentDocName?: string;
+  documentType?: "CHEQUE" | "VOUCHER" | "SANCTION_NOTE" | "GENERIC";
 }
 
 export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
@@ -38,28 +40,47 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
   onHoverField,
   onReRunAi,
   isAiRunning,
+  currentDocName,
+  documentType,
 }) => {
   const [showIfscDetails, setShowIfscDetails] = useState(true);
   const [showDebitPoolDetails, setShowDebitPoolDetails] = useState(false);
 
   const fields = aiResult?.fields;
   const isMismatch = aiResult?.overallStatus === "MISMATCH";
+  const effectiveDocType = aiResult?.documentType || documentType || "VOUCHER";
+  const docLabel =
+    effectiveDocType === "CHEQUE"
+      ? "Cheque Leaf (CTS-2010)"
+      : effectiveDocType === "SANCTION_NOTE"
+      ? "Loan Sanction Note"
+      : "Disbursal Voucher";
 
-  // Bank Directory Lookup via IFSC
-  const ifscInfo = ValidationService.lookupIFSC(payment.ifsc);
+  // Bank Directory Lookup via IFSC (uses extracted IFSC if valid, or payment IFSC)
+  const docIfsc = fields?.ifsc?.extracted || payment.ifsc;
+  const ifscInfo = ValidationService.lookupIFSC(docIfsc);
 
   // Amount in Words
   const enteredAmountWords = ValidationService.numberToIndianWords(payment.netAmount);
-  const voucherAmount = fields?.amount.extracted !== undefined && fields?.amount.extracted !== null
-    ? Number(fields.amount.extracted)
-    : payment.netAmount;
+  const voucherAmount =
+    fields?.amount?.extracted !== undefined && fields?.amount?.extracted !== null
+      ? Number(fields.amount.extracted)
+      : payment.netAmount;
   const voucherAmountWords = ValidationService.numberToIndianWords(voucherAmount);
 
   // Character Diff for Account Number
-  const voucherAccStr = fields?.accountNumber.extracted
+  const voucherAccStr = fields?.accountNumber?.extracted
     ? String(fields.accountNumber.extracted)
     : payment.accountNumber;
   const accCharDiff = ValidationService.compareStringsDigitByDigit(payment.accountNumber, voucherAccStr);
+
+  const isAmtMatched = fields?.amount ? fields.amount.matched : Number(voucherAmount) === Number(payment.netAmount);
+  const isAccMatched = fields?.accountNumber ? fields.accountNumber.matched : voucherAccStr === payment.accountNumber;
+  const isPayeeMatched = fields?.beneficiary ? fields.beneficiary.matched : (fields?.beneficiary?.extracted || payment.beneficiaryName) === payment.beneficiaryName;
+  const isIfscMatched = fields?.ifsc ? fields.ifsc.matched : true;
+
+  const docBeneficiary = fields?.beneficiary?.extracted || payment.beneficiaryName;
+  const docBankName = fields?.bankName?.extracted || (effectiveDocType === "CHEQUE" ? "HDFC Bank Ltd." : payment.bankName);
 
   return (
     <div id="reconciliation-matrix" className="space-y-4">
@@ -86,13 +107,13 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
               <div>
                 <span className="text-sm font-black tracking-tight text-white block">
                   {aiResult.overallStatus === "PASS"
-                    ? "Clearance Passed • All 4 Critical Fields Verified"
-                    : "DISCREPANCY ALERT • Review Required"}
+                    ? `Clearance Passed • ${docLabel} Reconciled`
+                    : `DISCREPANCY ALERT • ${docLabel} Attention Required`}
                 </span>
                 <span className="text-[10px] text-white/60 font-normal">
                   {aiResult.overallStatus === "PASS"
-                    ? "Voucher data strictly reconciles with maker entry."
-                    : "Immediate checker intervention required before clearance."}
+                    ? `Extracted data from ${currentDocName || docLabel} strictly reconciles with maker entry.`
+                    : "Immediate checker intervention required before dual-signoff authorization."}
                 </span>
               </div>
             </div>
@@ -129,7 +150,7 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
           <button
             onClick={onReRunAi}
             disabled={isAiRunning}
-            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold text-xs shadow-md"
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold text-xs shadow-md hover:brightness-110 active:scale-95 transition-all"
           >
             {isAiRunning ? "Scanning..." : "Run AI Verification"}
           </button>
@@ -138,15 +159,18 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
 
       {/* 2. Side-by-Side 3-Way Reconciliation Table */}
       <div className="rounded-3xl glass-card overflow-hidden border border-white/15 shadow-xl">
-        <div className="p-3.5 bg-white/5 border-b border-white/10 flex items-center justify-between">
+        <div className="p-3.5 bg-white/5 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ArrowRightLeft className="w-4 h-4 text-purple-400" />
             <span className="text-xs font-bold text-white tracking-wide">
               3-Way Optical Reconciliation Matrix
             </span>
+            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              Live {docLabel}
+            </span>
           </div>
           <span className="text-[10px] text-white/50 font-mono">
-            Hover row to spotlight voucher region
+            Spotlight sync active • Hover row to highlight instrument
           </span>
         </div>
 
@@ -159,7 +183,7 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
             className={`p-4 transition-all duration-150 ${
               activeField === "amount"
                 ? "bg-purple-600/25 ring-1 ring-purple-400"
-                : fields?.amount.matched === false
+                : !isAmtMatched
                 ? "bg-rose-500/15"
                 : "hover:bg-white/5"
             }`}
@@ -172,7 +196,7 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
                     CRITICAL
                   </span>
                 </div>
-                <span className="text-[10px] text-white/50 block mt-0.5">Disbursement figure</span>
+                <span className="text-[10px] text-white/50 block mt-0.5">Disbursal figure</span>
               </div>
 
               {/* Maker Record */}
@@ -183,33 +207,35 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
                 <span className="text-[10px] text-purple-200 leading-tight block mt-0.5 font-semibold">
                   {enteredAmountWords}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker</span>
+                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker (LMS)</span>
               </div>
 
-              {/* Voucher Extracted */}
+              {/* Document Extracted */}
               <div className="col-span-4">
                 <span
                   className={`font-black text-sm block ${
-                    fields?.amount.matched === false ? "text-rose-400" : "text-white"
+                    !isAmtMatched ? "text-rose-400" : "text-white"
                   }`}
                 >
-                  {fields?.amount.extracted !== undefined && fields?.amount.extracted !== null
-                    ? ValidationService.formatINR(Number(fields.amount.extracted))
+                  {voucherAmount !== undefined && voucherAmount !== null
+                    ? ValidationService.formatINR(voucherAmount)
                     : "—"}
                 </span>
                 <span
                   className={`text-[10px] leading-tight block mt-0.5 font-semibold ${
-                    fields?.amount.matched === false ? "text-rose-300" : "text-purple-200"
+                    !isAmtMatched ? "text-rose-300" : "text-purple-200"
                   }`}
                 >
                   {voucherAmountWords}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Extracted from Voucher</span>
+                <span className="text-[9px] text-white/40 block mt-1">
+                  Extracted from {docLabel}
+                </span>
               </div>
 
               {/* Match Indicator */}
               <div className="col-span-1 text-right pt-1">
-                {fields?.amount.matched ? (
+                {isAmtMatched ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto" />
                 ) : (
                   <XCircle className="w-5 h-5 text-rose-400 ml-auto animate-pulse" />
@@ -218,15 +244,15 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
             </div>
 
             {/* Mismatch Alert Box */}
-            {fields?.amount.matched === false && (
+            {!isAmtMatched && (
               <div className="mt-3 p-3 rounded-2xl bg-rose-500/25 border border-rose-500/40 text-rose-200 text-xs font-semibold flex items-center justify-between">
                 <div>
-                  <span className="text-white font-bold">Variance: </span>
-                  Entered ₹{payment.netAmount.toLocaleString("en-IN")} vs Voucher ₹
-                  {Number(fields.amount.extracted).toLocaleString("en-IN")}
+                  <span className="text-white font-bold">Variance Detected: </span>
+                  Entered ₹{payment.netAmount.toLocaleString("en-IN")} vs {docLabel} ₹
+                  {Number(voucherAmount).toLocaleString("en-IN")}
                 </div>
                 <span className="px-2 py-0.5 rounded-lg bg-rose-600 text-white text-[11px] font-black">
-                  Diff: ₹{Math.abs(payment.netAmount - (Number(fields.amount.extracted) || 0)).toLocaleString("en-IN")}
+                  Diff: ₹{Math.abs(payment.netAmount - (Number(voucherAmount) || 0)).toLocaleString("en-IN")}
                 </span>
               </div>
             )}
@@ -240,7 +266,7 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
             className={`p-4 transition-all duration-150 ${
               activeField === "accountNumber"
                 ? "bg-purple-600/25 ring-1 ring-purple-400"
-                : fields?.accountNumber.matched === false
+                : !isAccMatched
                 ? "bg-rose-500/15"
                 : "hover:bg-white/5"
             }`}
@@ -261,20 +287,22 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
                 <span className="font-mono font-black text-sm tracking-wider text-white block">
                   {payment.accountNumber}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker</span>
+                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker (LMS)</span>
               </div>
 
-              {/* Voucher Extracted */}
+              {/* Document Extracted */}
               <div className="col-span-4">
-                <span className="font-mono font-black text-sm tracking-wider text-white block">
-                  {fields?.accountNumber.extracted || "—"}
+                <span className={`font-mono font-black text-sm tracking-wider block ${!isAccMatched ? "text-rose-400" : "text-white"}`}>
+                  {voucherAccStr || "—"}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Extracted from Voucher</span>
+                <span className="text-[9px] text-white/40 block mt-1">
+                  Extracted from {docLabel}
+                </span>
               </div>
 
               {/* Match Indicator */}
               <div className="col-span-1 text-right pt-1">
-                {fields?.accountNumber.matched ? (
+                {isAccMatched ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto" />
                 ) : (
                   <XCircle className="w-5 h-5 text-rose-400 ml-auto" />
@@ -308,7 +336,11 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
             onMouseEnter={() => onHoverField("beneficiary")}
             onMouseLeave={() => onHoverField(null)}
             className={`p-4 transition-all duration-150 ${
-              activeField === "beneficiary" ? "bg-purple-600/25 ring-1 ring-purple-400" : "hover:bg-white/5"
+              activeField === "beneficiary"
+                ? "bg-purple-600/25 ring-1 ring-purple-400"
+                : !isPayeeMatched
+                ? "bg-rose-500/15"
+                : "hover:bg-white/5"
             }`}
           >
             <div className="grid grid-cols-12 gap-2 items-start">
@@ -319,18 +351,20 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
 
               <div className="col-span-4">
                 <span className="font-bold text-white block">{payment.beneficiaryName}</span>
-                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker</span>
+                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker (LMS)</span>
               </div>
 
               <div className="col-span-4">
-                <span className="font-bold text-white/90 block">
-                  {fields?.beneficiary.extracted || "—"}
+                <span className={`font-bold block ${!isPayeeMatched ? "text-rose-400" : "text-white/90"}`}>
+                  {docBeneficiary || "—"}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Extracted from Voucher</span>
+                <span className="text-[9px] text-white/40 block mt-1">
+                  Extracted from {docLabel}
+                </span>
               </div>
 
               <div className="col-span-1 text-right pt-1">
-                {fields?.beneficiary.matched ? (
+                {isPayeeMatched ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto" />
                 ) : (
                   <XCircle className="w-5 h-5 text-rose-400 ml-auto" />
@@ -359,19 +393,21 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
                 <span className="text-[11px] font-sans text-white/80 block mt-0.5 font-semibold">
                   {payment.bankName}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker</span>
+                <span className="text-[9px] text-white/40 block mt-1">Entered by Maker (LMS)</span>
               </div>
 
               <div className="col-span-4 font-mono">
-                <span className="font-black text-emerald-300 block">{fields?.ifsc.extracted || "—"}</span>
+                <span className="font-black text-emerald-300 block">{docIfsc || "—"}</span>
                 <span className="text-[11px] font-sans text-white/80 block mt-0.5 font-semibold">
-                  {fields?.bankName?.extracted || payment.bankName}
+                  {docBankName}
                 </span>
-                <span className="text-[9px] text-white/40 block mt-1">Extracted from Voucher</span>
+                <span className="text-[9px] text-white/40 block mt-1">
+                  Extracted from {docLabel}
+                </span>
               </div>
 
               <div className="col-span-1 text-right pt-1">
-                {fields?.ifsc.matched ? (
+                {isIfscMatched ? (
                   <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto" />
                 ) : (
                   <XCircle className="w-5 h-5 text-rose-400 ml-auto" />
@@ -384,12 +420,12 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple-300">
                   <Landmark className="w-3.5 h-3.5" />
-                  <span>RBI Central Directory Verification</span>
+                  <span>RBI Central Directory Verification ({docIfsc})</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowIfscDetails(!showIfscDetails)}
-                  className="text-white/50 hover:text-white text-[10px] flex items-center gap-0.5 font-semibold"
+                  className="text-white/50 hover:text-white text-[10px] flex items-center gap-0.5 font-semibold transition-colors"
                 >
                   <span>{showIfscDetails ? "Collapse" : "Expand Details"}</span>
                   {showIfscDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
