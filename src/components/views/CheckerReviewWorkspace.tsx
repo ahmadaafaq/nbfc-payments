@@ -21,7 +21,7 @@ import {
 import { StorageService } from "../../services/storageService";
 import { ValidationService } from "../../services/validationService";
 import { AIVerificationService } from "../../services/aiVerificationService";
-import { Payment, UserProfile, PaymentDocument } from "../../types";
+import { Payment, UserProfile, PaymentDocument, AIVerificationResult } from "../../types";
 import { StatusBadge } from "../common/StatusBadge";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { showToast } from "../common/ToastNotification";
@@ -76,6 +76,9 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
 
   // AI Verification State
   const [isAiRunning, setIsAiRunning] = useState<boolean>(false);
+  const [currentAiResult, setCurrentAiResult] = useState<AIVerificationResult | undefined>(
+    payment?.aiVerification
+  );
 
   // Workspace Tabs (Optical Verification vs Full Audit Trail)
   const [activeTab, setActiveTab] = useState<"verification" | "audit">("verification");
@@ -157,6 +160,7 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
   ) => {
     if (!payment) return;
     setIsAiRunning(true);
+    const minDelay = new Promise((resolve) => setTimeout(resolve, 950));
     try {
       const preprocessed = await AIVerificationService.preprocessImage(
         targetDocUrl,
@@ -167,12 +171,17 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
         }
       );
 
-      const result = await AIVerificationService.verifyPaymentDocument(
-        payment,
-        preprocessed || targetDocUrl,
-        docName,
-        mimeType
-      );
+      const [result] = await Promise.all([
+        AIVerificationService.verifyPaymentDocument(
+          payment,
+          preprocessed || targetDocUrl,
+          docName,
+          mimeType
+        ),
+        minDelay,
+      ]);
+
+      setCurrentAiResult(result);
 
       StorageService.updatePayment({
         ...payment,
@@ -181,7 +190,9 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
 
       const fresh = StorageService.getPaymentById(payment.id);
       if (fresh) {
-        setPayment(fresh);
+        setPayment({ ...fresh, aiVerification: result });
+      } else {
+        setPayment((prev) => (prev ? { ...prev, aiVerification: result } : prev));
       }
 
       showToast(
@@ -612,8 +623,8 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
           <DocumentInspectionDeck
             docUrl={activeDocUrl}
             docName={currentDoc?.name || "Disbursal_Voucher.svg"}
-            documentType={payment.aiVerification?.documentType}
-            dynamicBoundingBoxes={payment.aiVerification?.boundingBoxes}
+            documentType={currentAiResult?.documentType || payment.aiVerification?.documentType}
+            dynamicBoundingBoxes={currentAiResult?.boundingBoxes || payment.aiVerification?.boundingBoxes}
             activeField={activeField}
             onSelectField={setActiveField}
             zoomLevel={zoomLevel}
@@ -689,13 +700,13 @@ export const CheckerReviewWorkspace: React.FC<CheckerReviewWorkspaceProps> = ({
             <div className="space-y-4 animate-in fade-in">
               <ReconciliationMatrix
                 payment={payment}
-                aiResult={payment.aiVerification}
+                aiResult={currentAiResult || payment.aiVerification}
                 activeField={activeField}
                 onHoverField={setActiveField}
                 onReRunAi={handleReRunAi}
                 isAiRunning={isAiRunning}
                 currentDocName={currentDoc?.name}
-                documentType={payment.aiVerification?.documentType}
+                documentType={currentAiResult?.documentType || payment.aiVerification?.documentType}
               />
 
               <CheckerActionDeck

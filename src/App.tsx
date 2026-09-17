@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 import { AppHeader } from "./components/layout/AppHeader";
 import { AppSidebar } from "./components/layout/AppSidebar";
@@ -43,11 +45,16 @@ export default function App() {
     }
   }, [currentView]);
 
-  // Initialize theme and service worker
+  // Initialize theme, Supabase DB sync, and service worker
   useEffect(() => {
     const currentTheme = StorageService.getTheme();
     StorageService.setTheme(currentTheme);
     setTheme(currentTheme);
+
+    // Initialize Supabase Cloud Database synchronization
+    StorageService.initializeFromDb().catch((err) => {
+      console.warn("Initial Supabase DB sync notice:", err);
+    });
 
     // Register service worker for PWA offline caching
     if ("serviceWorker" in navigator) {

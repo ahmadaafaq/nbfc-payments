@@ -22,17 +22,28 @@ import {
   Layers,
   Wallet,
   Landmark,
+  Database,
+  RefreshCw,
+  Cloud,
+  Zap,
 } from "lucide-react";
 import { StorageService } from "../../services/storageService";
 import { Branch, UserProfile, DebitAccount, UserRole } from "../../types";
 import { AmbientInfoButton } from "../common/AmbientInfoButton";
 import { ConfirmModal } from "../common/ConfirmModal";
 import { showToast } from "../common/ToastNotification";
+import { SupabaseStatusModal } from "../common/SupabaseStatusModal";
+import { BlankSlateModal } from "../common/BlankSlateModal";
+import { RotateCcw } from "lucide-react";
 
 export const AdminView: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>(StorageService.getBranches());
   const [users, setUsers] = useState<UserProfile[]>(StorageService.getUsers());
   const [accounts, setAccounts] = useState<DebitAccount[]>(StorageService.getDebitAccounts());
+  const [hasData, setHasData] = useState<boolean>(StorageService.hasMockData());
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [showBlankSlateModal, setShowBlankSlateModal] = useState(false);
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
 
   // Listen to StorageService changes
   useEffect(() => {
@@ -40,6 +51,7 @@ export const AdminView: React.FC = () => {
       setBranches(StorageService.getBranches());
       setUsers(StorageService.getUsers());
       setAccounts(StorageService.getDebitAccounts());
+      setHasData(StorageService.hasMockData());
     });
     return unsubscribe;
   }, []);
@@ -410,7 +422,112 @@ export const AdminView: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. System Health & Navigation Tabs */}
+      {/* 2. Supabase Cloud Database Status Banner */}
+      <div className="p-4 rounded-3xl bg-slate-900/90 border border-emerald-500/30 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 backdrop-blur-xl">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black text-white">Supabase Cloud Database</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live Sync Active
+              </span>
+            </div>
+            <p className="text-xs text-white/60 font-mono">
+              PostgreSQL 15 • Ref: blbvlsxtqodtdbfpqyap • Realtime Channels Active
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            onClick={async () => {
+              setIsSyncingDb(true);
+              const res = await StorageService.fullSyncWithCloud();
+              setIsSyncingDb(false);
+              showToast(res.message, res.success ? "success" : "warning", "Cloud Sync");
+            }}
+            disabled={isSyncingDb}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/10 flex items-center gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDb ? "animate-spin text-emerald-400" : ""}`} />
+            <span>{isSyncingDb ? "Syncing..." : "Sync Cloud"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowDbModal(true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-colors flex items-center gap-1.5 shadow-sm"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Manage DB</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2.5 Data Environment & Client Sandbox Controls Banner */}
+      <div className="p-4.5 rounded-3xl glass-card border border-white/10 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div
+            className={`p-3 rounded-2xl border ${
+              hasData
+                ? "bg-purple-500/10 border-purple-500/30 text-purple-300"
+                : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+            }`}
+          >
+            {hasData ? <Sparkles className="w-5 h-5" /> : <Trash2 className="w-5 h-5" />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">Client Testing & Sandbox Mode</span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                  hasData
+                    ? "bg-purple-500/20 text-purple-300 border-purple-400/30"
+                    : "bg-amber-500/20 text-amber-300 border-amber-400/30"
+                }`}
+              >
+                {hasData ? "DEMO DATA LOADED" : "BLANK SLATE ACTIVE"}
+              </span>
+            </div>
+            <p className="text-xs text-white/60 mt-0.5">
+              {hasData
+                ? "Detach mock transactions to test the workflow with fresh, empty input data."
+                : "Application is in fresh blank slate state. You can restore demo records at any time."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          {hasData ? (
+            <button
+              type="button"
+              id="admin-clear-data-btn"
+              onClick={() => setShowBlankSlateModal(true)}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 transition flex items-center gap-2 shadow-sm active:scale-95"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Data (Blank Slate)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              id="admin-restore-data-btn"
+              onClick={() => setShowBlankSlateModal(true)}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white shadow-md border border-white/20 transition flex items-center gap-2 active:scale-95"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restore Mock Demo Data</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 3. System Health & Navigation Tabs */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-3xl glass-card border border-white/10 shadow-lg">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-2xl border border-white/10 text-xs font-semibold overflow-x-auto max-w-full">
@@ -1220,6 +1337,19 @@ export const AdminView: React.FC = () => {
         description={`Are you sure you want to revoke access and delete user "${userToDelete?.name}" (${userToDelete?.email}, Role: ${userToDelete?.role})?`}
         confirmText="Confirm Delete"
         variant="danger"
+      />
+
+      {/* Supabase Status Modal */}
+      <SupabaseStatusModal
+        isOpen={showDbModal}
+        onClose={() => setShowDbModal(false)}
+      />
+
+      {/* Blank Slate Modal */}
+      <BlankSlateModal
+        isOpen={showBlankSlateModal}
+        onClose={() => setShowBlankSlateModal(false)}
+        hasData={hasData}
       />
     </div>
   );

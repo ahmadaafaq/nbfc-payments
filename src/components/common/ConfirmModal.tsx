@@ -8,6 +8,7 @@ interface ConfirmModalProps {
   onConfirm: () => void;
   title: string;
   description?: string;
+  message?: string;
   confirmText?: string;
   cancelText?: string;
   variant?: "primary" | "danger" | "success";
@@ -21,12 +22,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
   title,
   description,
+  message,
   confirmText = "Confirm",
   cancelText = "Cancel",
   variant = "primary",
   details,
   loading = false,
 }) => {
+  const displayText = description || message;
   // Lock body scroll and handle Escape key
   useEffect(() => {
     if (isOpen) {
@@ -102,9 +105,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         {/* Body */}
         <div className="p-5 space-y-4">
-          {description && (
+          {displayText && (
             <p className="text-xs text-white/70 leading-relaxed">
-              {description}
+              {displayText}
             </p>
           )}
 

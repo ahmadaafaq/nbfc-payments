@@ -35,7 +35,7 @@ export type PaymentCategory =
   | "INTERNAL_TRANSFER"
   | "OTHER";
 
-export type PaymentMethod = "NEFT" | "RTGS" | "IFT" | "A2A";
+export type PaymentMethod = "NEFT" | "RTGS" | "IFT" | "A2A" | "IMPS";
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
 
@@ -149,6 +149,7 @@ export interface AuditLogEntry {
   userRole: UserRole;
   action: string;
   details: string;
+  notes?: string;
   previousValue?: string;
   newValue?: string;
 }
@@ -263,7 +264,7 @@ export interface PaymentBatch {
   approvedCount?: number;
   rejectedCount?: number;
   totalAmount: number;
-  status: "DRAFT" | "SUBMITTED" | "CHECKER_REVIEW" | "APPROVED" | "BANK_FILE_GENERATED" | "BANK_SUBMITTED";
+  status: "DRAFT" | "SUBMITTED" | "CHECKER_REVIEW" | "APPROVED" | "BANK_FILE_GENERATED" | "BANK_SUBMITTED" | "PROCESSING" | "COMPLETED";
   createdBy?: string;
   createdById?: string;
   makerId?: string;
@@ -372,8 +373,8 @@ export type LoanProductType =
 
 export interface CommissionSlab {
   minAmount: number;
-  maxAmount: number;
-  commissionPercentage: number;
+  maxAmount: number | null;
+  commissionPercentage?: number;
   ratePercentage?: number;
 }
 

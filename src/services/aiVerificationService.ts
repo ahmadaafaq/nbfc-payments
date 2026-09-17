@@ -1,4 +1,5 @@
 import { Payment, AIVerificationResult } from "../types";
+import Tesseract from "tesseract.js";
 
 export interface PreprocessingOptions {
   grayscale?: boolean;
@@ -122,6 +123,28 @@ export class AIVerificationService {
   }
 
   /**
+   * Runs Tesseract OCR or SVG parsing on client side to extract text
+   */
+  static async performClientOcr(dataUrl: string): Promise<string> {
+    if (!dataUrl) return "";
+
+    // 1. If SVG, extract text nodes
+    if (dataUrl.startsWith("data:image/svg+xml") || dataUrl.includes("<svg")) {
+      const parsed = this.extractFromSvgData(dataUrl);
+      return parsed?.rawText || "";
+    }
+
+    // 2. If raster image (PNG, JPG, WebP), run Tesseract
+    try {
+      const res = await Tesseract.recognize(dataUrl, "eng");
+      return res?.data?.text || "";
+    } catch (e) {
+      console.warn("Tesseract client OCR failed, falling back:", e);
+      return "";
+    }
+  }
+
+  /**
    * Parses SVG string or data URL to extract text nodes, numbers, IFSCs, amounts
    */
   static extractFromSvgData(svgDataUrlOrString: string) {
@@ -141,8 +164,10 @@ export class AIVerificationService {
       const isCheque =
         rawText.includes("A/C PAYEE") ||
         rawText.includes("CTS - 2010") ||
+        rawText.includes("CTS-2010") ||
         rawText.includes("OR BEARER") ||
         rawText.includes("chequeBg") ||
+        rawText.includes("A/C NO.") ||
         rawText.includes('viewBox="0 0 900 420"');
 
       // Extract all text content inside <text> tags
@@ -204,11 +229,71 @@ export class AIVerificationService {
         accountNumber,
         amount,
         beneficiary,
-        rawText,
+        rawText: textMatches.join(" \n "),
       };
     } catch (e) {
       return null;
     }
+  }
+
+  /**
+   * Parse arbitrary OCR text string
+   */
+  static parseTextFields(rawText: string) {
+    if (!rawText) return {};
+
+    const isCheque =
+      rawText.toUpperCase().includes("PAY") ||
+      rawText.toUpperCase().includes("BEARER") ||
+      rawText.toUpperCase().includes("CHEQUE") ||
+      rawText.toUpperCase().includes("CTS") ||
+      rawText.toUpperCase().includes("RUPEES");
+
+    let ifsc: string | undefined;
+    let accountNumber: string | undefined;
+    let amount: number | undefined;
+    let beneficiary: string | undefined;
+
+    // IFSC
+    const ifscMatch = rawText.match(/\b([A-Z]{4}0[A-Z0-9]{6})\b/i);
+    if (ifscMatch) {
+      ifsc = ifscMatch[1].toUpperCase();
+    }
+
+    // Account Number
+    const accMatch =
+      rawText.match(/(?:A\/?C\s*NO\.?|ACCOUNT\s*NO\.?|AC\s*NO\.?|ACCT\s*#?)[:\s]*([0-9]{9,18})/i) ||
+      rawText.match(/\b([0-9]{9,18})\b/);
+    if (accMatch) {
+      accountNumber = accMatch[1];
+    }
+
+    // Amount
+    const amtMatch =
+      rawText.match(/(?:₹|RS\.?|INR)\s*([0-9,]+(?:\.[0-9]{2})?)/i) ||
+      rawText.match(/([0-9,]+)\s*\/-/);
+    if (amtMatch) {
+      const parsed = Number(amtMatch[1].replace(/,/g, ""));
+      if (!isNaN(parsed) && parsed > 50) {
+        amount = parsed;
+      }
+    }
+
+    // Payee
+    const payMatch = rawText.match(/PAY\s+([A-Z\s\.\,\&]+?)(?:\s+OR\s+BEARER|\s+RUPEES|\s+₹|\n|$)/i);
+    if (payMatch) {
+      const p = payMatch[1].trim();
+      if (p.length > 2) beneficiary = p;
+    }
+
+    return {
+      isCheque,
+      documentType: isCheque ? ("CHEQUE" as const) : ("VOUCHER" as const),
+      ifsc,
+      accountNumber,
+      amount,
+      beneficiary,
+    };
   }
 
   /**
@@ -221,6 +306,10 @@ export class AIVerificationService {
     mimeType: string = "image/png"
   ): Promise<AIVerificationResult> {
     try {
+      // 1. Run quick client OCR
+      const clientOcrText = documentDataUrl ? await this.performClientOcr(documentDataUrl) : "";
+      const parsedText = this.parseTextFields(clientOcrText);
+
       const response = await fetch("/api/ai/verify", {
         method: "POST",
         headers: {
@@ -231,6 +320,8 @@ export class AIVerificationService {
           imageBase64: documentDataUrl,
           documentName: documentName || (payment as any)?.documentName || "",
           mimeType,
+          clientOcrText,
+          extractedCandidates: parsedText,
         }),
       });
 
@@ -248,7 +339,7 @@ export class AIVerificationService {
         }
         return {
           ...result,
-          engine: data.engine || "gemini-3.8-flash",
+          engine: data.engine || "gemini-2.5-flash",
           verifiedAt: data.timestamp || new Date().toISOString(),
         };
       }
@@ -298,165 +389,92 @@ export class AIVerificationService {
       extractedAccount = filenameAccountMatch[1];
     }
 
-    const isAmtDiff =
-      extractedAmount !== undefined &&
-      extractedAmount !== null &&
-      Number(extractedAmount) !== Number(payment.netAmount);
+    const enteredAmount = Number(payment.netAmount) || 0;
+    const docAmount = Number(extractedAmount) || 0;
+    const isAmountMatched = Math.abs(enteredAmount - docAmount) < 0.01;
+    const isAccountMatched = String(extractedAccount).trim() === String(payment.accountNumber).trim();
+    const isPayeeMatched =
+      String(extractedBeneficiary).toLowerCase().trim() ===
+      String(payment.beneficiaryName).toLowerCase().trim();
+    const isIfscMatched =
+      String(extractedIfsc).toUpperCase().trim() === String(payment.ifsc).toUpperCase().trim();
 
-    const isAccDiff =
-      extractedAccount !== undefined &&
-      extractedAccount !== null &&
-      extractedAccount !== payment.accountNumber;
-
-    const isNameDiff =
-      extractedBeneficiary !== undefined &&
-      extractedBeneficiary !== null &&
-      extractedBeneficiary !== payment.beneficiaryName;
-
-    const isMismatch =
-      (payment as any)?.isMismatchTest ||
-      nameLower.includes("mismatch") ||
-      isAmtDiff ||
-      isAccDiff ||
-      isNameDiff;
+    const discrepancies: string[] = [];
+    if (!isAmountMatched) {
+      discrepancies.push(
+        `AMOUNT MISMATCH on ${isCheque ? "Cheque Leaf" : "Document"}: Entered ₹${enteredAmount.toLocaleString("en-IN")} vs Document ₹${docAmount.toLocaleString("en-IN")} (Variance: ₹${Math.abs(enteredAmount - docAmount).toLocaleString("en-IN")}).`
+      );
+    }
+    if (!isAccountMatched) {
+      discrepancies.push(
+        `Account number difference: Entered ${payment.accountNumber} vs Document ${extractedAccount}.`
+      );
+    }
+    if (!isPayeeMatched) {
+      discrepancies.push(
+        `Beneficiary name variance: Entered "${payment.beneficiaryName}" vs Document "${extractedBeneficiary}".`
+      );
+    }
+    if (!isIfscMatched) {
+      discrepancies.push(
+        `IFSC Code discrepancy: Entered "${payment.ifsc}" vs Document "${extractedIfsc}".`
+      );
+    }
 
     const isBlurry = (payment as any)?.documentQuality === "POOR" || nameLower.includes("blur");
-
-    if (isMismatch) {
-      const enteredAmount = Number(payment.netAmount) || 30000;
-      const docAmount = Number(extractedAmount) || (isAmtDiff ? Number(extractedAmount) : 3000);
-      const docAccount = extractedAccount || "0296000100089210";
-      const docBeneficiary = extractedBeneficiary || payment.beneficiaryName || "Beneficiary";
-      const isAccountMatched = docAccount === payment.accountNumber;
-      const isAmountMatched = Number(docAmount) === Number(enteredAmount);
-      const isPayeeMatched = docBeneficiary === payment.beneficiaryName;
-
-      const discrepancies: string[] = [];
-      if (!isAmountMatched) {
-        discrepancies.push(
-          `AMOUNT MISMATCH on ${isCheque ? "Cheque Leaf" : "Voucher"}: Entered ₹${enteredAmount.toLocaleString("en-IN")} vs Document ₹${docAmount.toLocaleString("en-IN")}. Difference: ₹${Math.abs(enteredAmount - docAmount).toLocaleString("en-IN")}.`
-        );
-      }
-      if (!isAccountMatched) {
-        discrepancies.push(
-          `Account number difference: Entered ${payment.accountNumber} vs Document ${docAccount}.`
-        );
-      }
-      if (!isPayeeMatched) {
-        discrepancies.push(
-          `Beneficiary name variance: Entered "${payment.beneficiaryName}" vs Document "${docBeneficiary}".`
-        );
-      }
-
-      const matchedCount = 4 - discrepancies.length;
-
-      return {
-        engine: "client-vision-ocr",
-        documentType,
-        verifiedAt: new Date().toISOString(),
-        documentQuality: "GOOD",
-        overallStatus: "MISMATCH",
-        overallConfidence: "HIGH",
-        matchedFieldsCount: Math.max(0, matchedCount),
-        totalFieldsCount: 4,
-        summary: `${isCheque ? "Cheque Leaf" : "Voucher"} Discrepancy detected. ${discrepancies.join(" ")}`,
-        fields: {
-          beneficiary: {
-            extracted: docBeneficiary,
-            matched: isPayeeMatched,
-            confidence: "HIGH",
-            readability: "FULLY_READABLE",
-            notes: isPayeeMatched
-              ? `Matches payee on ${isCheque ? "cheque leaf" : "disbursal voucher"}`
-              : `Name variance detected on ${isCheque ? "cheque" : "voucher"}`,
-            box: boundingBoxes.beneficiary,
-          },
-          accountNumber: {
-            extracted: docAccount,
-            matched: isAccountMatched,
-            confidence: "HIGH",
-            readability: "FULLY_READABLE",
-            notes: isAccountMatched ? "Matches account number" : "Account digits differ",
-            box: boundingBoxes.accountNumber,
-          },
-          ifsc: {
-            extracted: extractedIfsc,
-            matched: true,
-            confidence: "HIGH",
-            readability: "FULLY_READABLE",
-            notes: "Matches branch IFSC",
-            box: boundingBoxes.ifsc,
-          },
-          amount: {
-            extracted: docAmount,
-            matched: isAmountMatched,
-            confidence: "HIGH",
-            readability: "FULLY_READABLE",
-            difference: isAmountMatched ? 0 : enteredAmount - docAmount,
-            notes: isAmountMatched
-              ? "Amount matches"
-              : `Discrepancy of ₹${Math.abs(enteredAmount - docAmount).toLocaleString("en-IN")}`,
-            box: boundingBoxes.amount,
-          },
-          bankName: {
-            extracted: extractedBank,
-            matched: true,
-            confidence: "HIGH",
-            readability: "FULLY_READABLE",
-            notes: "Bank title confirmed",
-            box: boundingBoxes.bankName,
-          },
-        },
-        boundingBoxes,
-        discrepancies,
-        warnings: ["Checker review required. Do not approve without maker correction."],
-      };
-    }
+    const hasDiscrepancy = discrepancies.length > 0;
+    const matchedCount = [isAmountMatched, isAccountMatched, isPayeeMatched, isIfscMatched].filter(Boolean).length;
 
     return {
       engine: "client-vision-ocr",
       documentType,
       verifiedAt: new Date().toISOString(),
       documentQuality: isBlurry ? "POOR" : "GOOD",
-      overallStatus: isBlurry ? "REVIEW_REQUIRED" : "PASS",
+      overallStatus: hasDiscrepancy ? "MISMATCH" : isBlurry ? "REVIEW_REQUIRED" : "PASS",
       overallConfidence: isBlurry ? "LOW" : "HIGH",
-      matchedFieldsCount: isBlurry ? 2 : 4,
+      matchedFieldsCount: matchedCount,
       totalFieldsCount: 4,
-      summary: isBlurry
+      summary: hasDiscrepancy
+        ? `${isCheque ? "Cheque Leaf" : "Document"} Discrepancy detected: ${discrepancies.join(" ")}`
+        : isBlurry
         ? "Document image is degraded or partially blurred. Unable to reliably verify all fields. Manual inspection required."
-        : `${isCheque ? "Cheque Leaf" : "Voucher"} Optical Verification: 4/4 critical fields matched successfully.`,
+        : `${isCheque ? "CTS-2010 Cheque Leaf" : "Disbursal Voucher"} Optical Verification: 4/4 critical fields matched successfully.`,
       fields: {
         beneficiary: {
           extracted: extractedBeneficiary,
-          matched: true,
-          confidence: isBlurry ? "MEDIUM" : "HIGH",
-          readability: isBlurry ? "PARTIALLY_READABLE" : "FULLY_READABLE",
-          notes: `Payee confirmed on ${isCheque ? "cheque" : "voucher"}`,
+          matched: isPayeeMatched,
+          confidence: "HIGH",
+          readability: "FULLY_READABLE",
+          notes: isPayeeMatched
+            ? `Matches payee on ${isCheque ? "cheque leaf" : "disbursal voucher"}`
+            : `Name variance detected on ${isCheque ? "cheque" : "voucher"}`,
           box: boundingBoxes.beneficiary,
         },
         accountNumber: {
           extracted: extractedAccount,
-          matched: true,
-          confidence: isBlurry ? "LOW" : "HIGH",
-          readability: isBlurry ? "PARTIALLY_READABLE" : "FULLY_READABLE",
-          notes: isBlurry ? "Partially readable" : `Account number confirmed on ${isCheque ? "cheque" : "voucher"}`,
+          matched: isAccountMatched,
+          confidence: "HIGH",
+          readability: "FULLY_READABLE",
+          notes: isAccountMatched ? "Matches account number" : `Account digits differ: ${payment.accountNumber} vs ${extractedAccount}`,
           box: boundingBoxes.accountNumber,
         },
         ifsc: {
           extracted: extractedIfsc,
-          matched: true,
+          matched: isIfscMatched,
           confidence: "HIGH",
           readability: "FULLY_READABLE",
-          notes: "IFSC code validated",
+          notes: isIfscMatched ? "Branch IFSC code confirmed" : "IFSC code discrepancy",
           box: boundingBoxes.ifsc,
         },
         amount: {
-          extracted: isBlurry ? null : Number(extractedAmount) || 0,
-          matched: !isBlurry,
-          confidence: isBlurry ? "LOW" : "HIGH",
-          readability: isBlurry ? "UNREADABLE" : "FULLY_READABLE",
-          difference: 0,
-          notes: isBlurry ? "Unable to read amount reliably" : "Amount matched exactly",
+          extracted: docAmount,
+          matched: isAmountMatched,
+          confidence: "HIGH",
+          readability: "FULLY_READABLE",
+          difference: enteredAmount - docAmount,
+          notes: isAmountMatched
+            ? "Disbursement amount matched exactly"
+            : `Variance of ₹${Math.abs(enteredAmount - docAmount).toLocaleString("en-IN")}`,
           box: boundingBoxes.amount,
         },
         bankName: {
@@ -464,13 +482,13 @@ export class AIVerificationService {
           matched: true,
           confidence: "HIGH",
           readability: "FULLY_READABLE",
-          notes: "Bank name matched",
+          notes: "Bank title confirmed",
           box: boundingBoxes.bankName,
         },
       },
       boundingBoxes,
-      discrepancies: isBlurry ? ["Amount digits obscured by watermark/blur."] : [],
-      warnings: isBlurry ? ["Checker must inspect original document."] : [],
+      discrepancies,
+      warnings: hasDiscrepancy ? ["Checker review required. Do not approve without maker correction."] : [],
     };
   }
 }

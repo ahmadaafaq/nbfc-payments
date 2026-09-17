@@ -23,6 +23,7 @@ import {
   CHEQUE_DEFAULT_BOXES,
   VOUCHER_DEFAULT_BOXES,
 } from "../../services/aiVerificationService";
+import { GeminiScanningOverlay } from "../common/GeminiScanningOverlay";
 
 export type BoundingBoxField =
   | "beneficiary"
@@ -457,6 +458,14 @@ export const DocumentInspectionDeck: React.FC<DocumentInspectionDeckProps> = ({
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
             <span>Spotlight: {effectiveBoxes[activeField]?.label || activeField}</span>
           </div>
+        )}
+
+        {/* Centered Gemini AI Scanning HUD Overlay */}
+        {isAiRunning && (
+          <GeminiScanningOverlay
+            documentName={docName || (isCheque ? "Cancelled_Cheque.svg" : "Disbursal_Voucher.svg")}
+            documentType={isCheque ? "CTS-2010 CHEQUE" : "DISBURSAL VOUCHER"}
+          />
         )}
 
         {/* Scalable & Pannable Document Container */}

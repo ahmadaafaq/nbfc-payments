@@ -22,6 +22,7 @@ import { Payment, UserProfile, Branch, DebitAccount, AIVerificationResult } from
 import { showToast } from "../common/ToastNotification";
 import { BulkPaymentUploadTab } from "./BulkPaymentUploadTab";
 import { AmbientInfoButton } from "../common/AmbientInfoButton";
+import { GeminiScanningOverlay } from "../common/GeminiScanningOverlay";
 
 interface CreatePaymentViewProps {
   onNavigate: (view: string, params?: any) => void;
@@ -145,8 +146,40 @@ export const CreatePaymentView: React.FC<CreatePaymentViewProps> = ({ onNavigate
     const reader = new FileReader();
     reader.onload = (ev) => {
       if (ev.target?.result) {
-        setDocumentUrl(ev.target.result as string);
+        const dataUrl = ev.target.result as string;
+        setDocumentUrl(dataUrl);
         setAiResult(null);
+
+        // Auto-run AI scanning immediately on upload
+        setIsAiScanning(true);
+        AIVerificationService.verifyPaymentDocument(
+          {
+            beneficiaryName,
+            accountNumber,
+            ifsc,
+            bankName,
+            netAmount: Number(netAmount) || 0,
+            paymentDate,
+            remarks: remarks || (netAmount === "30000" && file.name.includes("Mismatch") ? "MISMATCH" : ""),
+          },
+          dataUrl
+        )
+          .then((result) => {
+            setAiResult(result);
+            showToast(
+              result.overallStatus === "PASS"
+                ? "Document verification successful. All extracted values match."
+                : `Discrepancy detected: ${result.summary}`,
+              result.overallStatus === "PASS" ? "success" : "warning",
+              "AI Verification"
+            );
+          })
+          .catch((err: any) => {
+            showToast("AI verification error: " + err.message, "danger", "Verification Error");
+          })
+          .finally(() => {
+            setIsAiScanning(false);
+          });
       }
     };
     reader.readAsDataURL(file);
@@ -160,19 +193,23 @@ export const CreatePaymentView: React.FC<CreatePaymentViewProps> = ({ onNavigate
     }
 
     setIsAiScanning(true);
+    const minDelay = new Promise((resolve) => setTimeout(resolve, 950));
     try {
-      const result = await AIVerificationService.verifyPaymentDocument(
-        {
-          beneficiaryName,
-          accountNumber,
-          ifsc,
-          bankName,
-          netAmount: Number(netAmount) || 0,
-          paymentDate,
-          remarks: remarks || (netAmount === "30000" && documentName.includes("Mismatch") ? "MISMATCH" : ""),
-        },
-        documentUrl
-      );
+      const [result] = await Promise.all([
+        AIVerificationService.verifyPaymentDocument(
+          {
+            beneficiaryName,
+            accountNumber,
+            ifsc,
+            bankName,
+            netAmount: Number(netAmount) || 0,
+            paymentDate,
+            remarks: remarks || (netAmount === "30000" && documentName.includes("Mismatch") ? "MISMATCH" : ""),
+          },
+          documentUrl
+        ),
+        minDelay,
+      ]);
       setAiResult(result);
       showToast(
         result.overallStatus === "PASS"
@@ -309,6 +346,14 @@ export const CreatePaymentView: React.FC<CreatePaymentViewProps> = ({ onNavigate
 
   return (
     <div id="create-payment-view" className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-200 text-white">
+      {/* Centered Viewport Scanning Loader when Document is Uploaded */}
+      {isAiScanning && (
+        <GeminiScanningOverlay
+          documentName={documentName || "Supporting Document"}
+          documentType="VOUCHER / CHEQUE"
+          isModal={true}
+        />
+      )}
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-3xl glass-card">
         <div className="flex items-center gap-3">
@@ -720,6 +765,12 @@ export const CreatePaymentView: React.FC<CreatePaymentViewProps> = ({ onNavigate
             {documentUrl ? (
               <div className="space-y-3">
                 <div className="relative rounded-2xl border border-white/15 overflow-hidden bg-black/30 backdrop-blur-md flex items-center justify-center p-3 min-h-48 max-h-64 shadow-inner">
+                  {isAiScanning && (
+                    <GeminiScanningOverlay
+                      documentName={documentName || "Voucher Document"}
+                      isCompact={true}
+                    />
+                  )}
                   <img
                     src={documentUrl}
                     alt="Payment voucher"

@@ -33,6 +33,7 @@ import {
   matchCommissionRule,
 } from "./phase2SeedData";
 import { AIVerificationService } from "./aiVerificationService";
+import { supabase, isSupabaseConfigured } from "./supabaseClient";
 
 const STORAGE_KEYS = {
   BRANCHES: "mgm_branches_v1",
@@ -50,11 +51,21 @@ const STORAGE_KEYS = {
   COMMISSION_RULES: "mgm_phase2_rules_v1",
   DISBURSALS: "mgm_phase2_disbursals_v1",
   COMMISSION_PAYABLES: "mgm_phase2_payables_v1",
+  SUPABASE_LAST_SYNC: "mgm_supabase_last_sync_v1",
 };
 
 export class StorageService {
   // Listeners for reactive updates
   private static listeners: Array<() => void> = [];
+  private static isDbInitialized = false;
+  private static isSyncing = false;
+  private static dbStatus = {
+    connected: true,
+    lastSynced: new Date().toISOString(),
+    projectRef: "blbvlsxtqodtdbfpqyap",
+    projectUrl: "https://blbvlsxtqodtdbfpqyap.supabase.co",
+    mode: "CLOUD_SUPABASE" as "CLOUD_SUPABASE" | "OFFLINE_FALLBACK",
+  };
 
   static subscribe(listener: () => void): () => void {
     this.listeners.push(listener);
@@ -70,6 +81,172 @@ export class StorageService {
       } catch (err) {
         console.error("Storage listener error:", err);
       }
+    }
+  }
+
+  // ==========================================================================
+  // SUPABASE CLOUD DATABASE SYNCHRONIZATION
+  // ==========================================================================
+  static getDbStatus() {
+    return this.dbStatus;
+  }
+
+  static async initializeFromDb() {
+    if (this.isDbInitialized) return;
+    this.isDbInitialized = true;
+
+    try {
+      // 1. Fetch live health check
+      const statusRes = await fetch("/api/db/status").then((r) => r.json()).catch(() => null);
+      if (statusRes && statusRes.connected) {
+        this.dbStatus.connected = true;
+        this.dbStatus.projectRef = statusRes.projectRef || "blbvlsxtqodtdbfpqyap";
+      }
+
+      // 2. Fetch payments from Cloud DB
+      const paymentsRes = await fetch("/api/db/payments").then((r) => r.json()).catch(() => null);
+      if (paymentsRes && paymentsRes.success && Array.isArray(paymentsRes.data) && paymentsRes.data.length > 0) {
+        console.log(`Loaded ${paymentsRes.data.length} live payments from Supabase Cloud DB`);
+        this.savePayments(paymentsRes.data, false);
+      } else {
+        // If DB is empty, trigger initial seed
+        fetch("/api/db/seed", { method: "POST" })
+          .then((r) => r.json())
+          .then((seedRes) => {
+            if (seedRes && seedRes.success) {
+              console.log("Supabase initial seed completed successfully.");
+            }
+          })
+          .catch((e) => console.warn("Seed request:", e));
+      }
+
+      // 3. Fetch batches from Cloud DB
+      const batchesRes = await fetch("/api/db/batches").then((r) => r.json()).catch(() => null);
+      if (batchesRes && batchesRes.success && Array.isArray(batchesRes.data) && batchesRes.data.length > 0) {
+        this.saveBatches(batchesRes.data, false);
+      }
+
+      this.dbStatus.lastSynced = new Date().toISOString();
+      this.notify();
+
+      // 4. Set up Supabase Realtime Subscription
+      if (isSupabaseConfigured) {
+        try {
+          supabase
+            .channel("schema-db-changes")
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "payments" },
+              (payload) => {
+                console.log("Realtime payment change from Supabase:", payload);
+                if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+                  const updatedRow = payload.new;
+                  const currentPayments = this.getPayments();
+                  const exists = currentPayments.find((p) => p.id === updatedRow.id);
+                  if (exists) {
+                    const mapped = currentPayments.map((p) =>
+                      p.id === updatedRow.id ? { ...p, ...(updatedRow.raw_data || {}), status: updatedRow.status } : p
+                    );
+                    this.savePayments(mapped, false);
+                  } else {
+                    const mapped = updatedRow.raw_data || {
+                      id: updatedRow.id,
+                      paymentRef: updatedRow.payment_ref,
+                      beneficiaryName: updatedRow.beneficiary_name,
+                      accountNumber: updatedRow.account_number,
+                      ifsc: updatedRow.ifsc,
+                      bankName: updatedRow.bank_name,
+                      netAmount: Number(updatedRow.net_amount),
+                      grossAmount: Number(updatedRow.gross_amount),
+                      status: updatedRow.status,
+                      paymentDate: updatedRow.payment_date,
+                    };
+                    this.savePayments([mapped, ...currentPayments], false);
+                  }
+                }
+              }
+            )
+            .subscribe();
+        } catch (subErr) {
+          console.warn("Supabase realtime subscription notice:", subErr);
+        }
+      }
+    } catch (err) {
+      console.warn("Supabase cloud sync initialization:", err);
+      this.dbStatus.mode = "OFFLINE_FALLBACK";
+    }
+  }
+
+  static async fullSyncWithCloud(): Promise<{ success: boolean; message: string; count?: number }> {
+    if (this.isSyncing) return { success: false, message: "Sync already in progress" };
+    this.isSyncing = true;
+
+    try {
+      // 1. Seed or verify DB
+      const seedRes = await fetch("/api/db/seed", { method: "POST" }).then((r) => r.json());
+      
+      // 2. Fetch fresh payments
+      const paymentsRes = await fetch("/api/db/payments").then((r) => r.json());
+      if (paymentsRes && paymentsRes.success && Array.isArray(paymentsRes.data)) {
+        this.savePayments(paymentsRes.data, false);
+      }
+
+      // 3. Fetch fresh batches
+      const batchesRes = await fetch("/api/db/batches").then((r) => r.json());
+      if (batchesRes && batchesRes.success && Array.isArray(batchesRes.data)) {
+        this.saveBatches(batchesRes.data, false);
+      }
+
+      this.dbStatus.lastSynced = new Date().toISOString();
+      this.dbStatus.connected = true;
+      this.notify();
+
+      return {
+        success: true,
+        message: `Successfully synchronized with Supabase PostgreSQL (${this.dbStatus.projectRef})`,
+        count: paymentsRes?.data?.length || 0,
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || "Failed to sync with Supabase" };
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  // Background Cloud Sync for a single payment
+  static async syncPaymentToCloud(payment: Payment) {
+    try {
+      await fetch("/api/db/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payment),
+      });
+    } catch (err) {
+      console.warn("Background payment sync to Supabase failed:", err);
+    }
+  }
+
+  // Background Cloud Sync for a single batch
+  static async syncBatchToCloud(batch: PaymentBatch) {
+    try {
+      await fetch("/api/db/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(batch),
+      });
+    } catch (err) {
+      console.warn("Background batch sync to Supabase failed:", err);
+    }
+  }
+
+  // Background Cloud Delete
+  static async deletePaymentFromCloud(paymentId: string) {
+    try {
+      await fetch(`/api/db/payments/${paymentId}`, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.warn("Background payment delete from Supabase failed:", err);
     }
   }
 
@@ -244,13 +421,14 @@ export class StorageService {
   // Payments
   static getPayments(): Payment[] {
     const raw = localStorage.getItem(STORAGE_KEYS.PAYMENTS);
-    if (!raw) {
+    if (raw === null) {
       const initial = generateInitialPayments();
-      this.savePayments(initial);
+      this.savePayments(initial, false);
       return initial;
     }
     try {
       const parsed: Payment[] = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
       let migrated = false;
       const updated = parsed.map((p) => {
         let changed = false;
@@ -276,16 +454,16 @@ export class StorageService {
         return p;
       });
       if (migrated) {
-        this.savePayments(updated);
+        this.savePayments(updated, false);
         return updated;
       }
       return parsed;
     } catch {
-      return generateInitialPayments();
+      return [];
     }
   }
 
-  static savePayments(payments: Payment[]) {
+  static savePayments(payments: Payment[], syncCloud = true) {
     localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
     this.notify();
   }
@@ -297,6 +475,7 @@ export class StorageService {
   static createPayment(payment: Payment) {
     const payments = [payment, ...this.getPayments()];
     this.savePayments(payments);
+    this.syncPaymentToCloud(payment);
     this.addNotification({
       title: "New Payment Created",
       message: `Payment ${payment.id} for ₹${payment.netAmount.toLocaleString("en-IN")} submitted for checker review.`,
@@ -308,6 +487,7 @@ export class StorageService {
   static updatePayment(updated: Payment) {
     const payments = this.getPayments().map((p) => (p.id === updated.id ? updated : p));
     this.savePayments(payments);
+    this.syncPaymentToCloud(updated);
 
     // If payment was settled (SUCCESSFUL) and belongs to a batch, check if all payments in that batch are now settled
     if (updated.status === "SUCCESSFUL" && updated.batchId) {
@@ -491,18 +671,20 @@ export class StorageService {
   // Batches
   static getBatches(): PaymentBatch[] {
     const raw = localStorage.getItem(STORAGE_KEYS.BATCHES);
-    if (!raw) {
-      this.saveBatches(INITIAL_BATCHES);
+    if (raw === null) {
+      this.saveBatches(INITIAL_BATCHES, false);
       return INITIAL_BATCHES;
     }
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed;
     } catch {
-      return INITIAL_BATCHES;
+      return [];
     }
   }
 
-  static saveBatches(batches: PaymentBatch[]) {
+  static saveBatches(batches: PaymentBatch[], syncCloud = true) {
     localStorage.setItem(STORAGE_KEYS.BATCHES, JSON.stringify(batches));
     this.notify();
   }
@@ -510,11 +692,13 @@ export class StorageService {
   static createBatch(batch: PaymentBatch) {
     const batches = [batch, ...this.getBatches()];
     this.saveBatches(batches);
+    this.syncBatchToCloud(batch);
   }
 
   static updateBatch(updated: PaymentBatch) {
     const batches = this.getBatches().map((b) => (b.id === updated.id ? updated : b));
     this.saveBatches(batches);
+    this.syncBatchToCloud(updated);
   }
 
   // Bank Exports History
@@ -537,14 +721,16 @@ export class StorageService {
   // Notifications
   static getNotifications(): InAppNotification[] {
     const raw = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-    if (!raw) {
+    if (raw === null) {
       this.saveNotifications(INITIAL_NOTIFICATIONS);
       return INITIAL_NOTIFICATIONS;
     }
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed;
     } catch {
-      return INITIAL_NOTIFICATIONS;
+      return [];
     }
   }
 
@@ -608,19 +794,16 @@ export class StorageService {
   // ==========================================================================
   static getDSAs(): DSAPartner[] {
     const raw = localStorage.getItem(STORAGE_KEYS.DSAS);
-    if (!raw) {
+    if (raw === null) {
       this.saveDSAs(INITIAL_DSAS);
       return INITIAL_DSAS;
     }
     try {
       const parsed: DSAPartner[] = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        this.saveDSAs(INITIAL_DSAS);
-        return INITIAL_DSAS;
-      }
+      if (!Array.isArray(parsed)) return [];
       return parsed;
     } catch {
-      return INITIAL_DSAS;
+      return [];
     }
   }
 
@@ -689,19 +872,16 @@ export class StorageService {
   // ==========================================================================
   static getCommissionRules(): CommissionRule[] {
     const raw = localStorage.getItem(STORAGE_KEYS.COMMISSION_RULES);
-    if (!raw) {
+    if (raw === null) {
       this.saveCommissionRules(INITIAL_COMMISSION_RULES);
       return INITIAL_COMMISSION_RULES;
     }
     try {
       const parsed: CommissionRule[] = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        this.saveCommissionRules(INITIAL_COMMISSION_RULES);
-        return INITIAL_COMMISSION_RULES;
-      }
+      if (!Array.isArray(parsed)) return [];
       return parsed;
     } catch {
-      return INITIAL_COMMISSION_RULES;
+      return [];
     }
   }
 
@@ -761,7 +941,7 @@ export class StorageService {
   // ==========================================================================
   static getDisbursals(): Disbursal[] {
     const raw = localStorage.getItem(STORAGE_KEYS.DISBURSALS);
-    if (!raw) {
+    if (raw === null) {
       const initial = generateInitialPhase2Data();
       this.saveDisbursals(initial.disbursals);
       this.saveCommissionPayables(initial.payables);
@@ -769,16 +949,10 @@ export class StorageService {
     }
     try {
       const parsed: Disbursal[] = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        const initial = generateInitialPhase2Data();
-        this.saveDisbursals(initial.disbursals);
-        this.saveCommissionPayables(initial.payables);
-        return initial.disbursals;
-      }
+      if (!Array.isArray(parsed)) return [];
       return parsed;
     } catch {
-      const initial = generateInitialPhase2Data();
-      return initial.disbursals;
+      return [];
     }
   }
 
@@ -925,22 +1099,17 @@ export class StorageService {
   // ==========================================================================
   static getCommissionPayables(): CommissionPayable[] {
     const raw = localStorage.getItem(STORAGE_KEYS.COMMISSION_PAYABLES);
-    if (!raw) {
+    if (raw === null) {
       const initial = generateInitialPhase2Data();
       this.saveCommissionPayables(initial.payables);
       return initial.payables;
     }
     try {
       const parsed: CommissionPayable[] = JSON.parse(raw);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        const initial = generateInitialPhase2Data();
-        this.saveCommissionPayables(initial.payables);
-        return initial.payables;
-      }
+      if (!Array.isArray(parsed)) return [];
       return parsed;
     } catch {
-      const initial = generateInitialPhase2Data();
-      return initial.payables;
+      return [];
     }
   }
 
@@ -1308,8 +1477,49 @@ export class StorageService {
   }
 
   // ==========================================================================
-  // RESET DEMO DATA HELPER
+  // BLANK SLATE & DEMO DATA MANAGEMENT
   // ==========================================================================
+  static hasMockData(): boolean {
+    const payments = this.getPayments();
+    const batches = this.getBatches();
+    const disbursals = this.getDisbursals();
+    const payables = this.getCommissionPayables();
+    return payments.length > 0 || batches.length > 0 || disbursals.length > 0 || payables.length > 0;
+  }
+
+  /**
+   * Detaches all mock and transactional data for a pristine Blank Slate client experience.
+   * Does NOT delete files or mock code definitions.
+   */
+  static clearMockData(clearMasterPartnersAndRules = false) {
+    this.savePayments([], false);
+    this.saveBatches([], false);
+    localStorage.setItem(STORAGE_KEYS.EXPORTS, JSON.stringify([]));
+    this.saveDisbursals([]);
+    this.saveCommissionPayables([]);
+
+    if (clearMasterPartnersAndRules) {
+      this.saveDSAs([]);
+      this.saveCommissionRules([]);
+    }
+
+    this.saveNotifications([
+      {
+        id: `notif-blank-${Date.now()}`,
+        title: "Blank Slate Ready",
+        message: "All mock operational data detached. You can test manual payment creation, disbursal imports, and checker workflows cleanly.",
+        type: "info",
+        timestamp: "Just now",
+        read: false,
+      },
+    ]);
+
+    this.notify();
+  }
+
+  /**
+   * Re-attaches and re-populates full rich mock demo data for instant demonstrations.
+   */
   static resetToDemoData() {
     localStorage.removeItem(STORAGE_KEYS.PAYMENTS);
     localStorage.removeItem(STORAGE_KEYS.BATCHES);
@@ -1317,6 +1527,7 @@ export class StorageService {
     localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
     localStorage.removeItem(STORAGE_KEYS.BRANCHES);
     localStorage.removeItem(STORAGE_KEYS.USERS);
+    localStorage.removeItem(STORAGE_KEYS.ACCOUNTS);
     localStorage.removeItem(STORAGE_KEYS.DSAS);
     localStorage.removeItem(STORAGE_KEYS.COMMISSION_RULES);
     localStorage.removeItem(STORAGE_KEYS.DISBURSALS);

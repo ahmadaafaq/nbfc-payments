@@ -11,11 +11,15 @@ import {
   AlertTriangle,
   RotateCcw,
   Sparkles,
+  Database,
+  Trash2,
 } from "lucide-react";
 import { StorageService } from "../../services/storageService";
 import { Branch, UserProfile, InAppNotification, UserRole } from "../../types";
 import { PWAInstallButton } from "../common/PWAInstallButton";
 import { MGMLogo } from "../common/MGMLogo";
+import { SupabaseStatusModal } from "../common/SupabaseStatusModal";
+import { BlankSlateModal } from "../common/BlankSlateModal";
 
 interface AppHeaderProps {
   onNavigate?: (view: string) => void;
@@ -29,6 +33,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
   const [currentUser, setCurrentUser] = useState<UserProfile>(StorageService.getCurrentUser());
   const [theme, setThemeState] = useState<"light" | "dark">(StorageService.getTheme());
   const [notifications, setNotifications] = useState<InAppNotification[]>(StorageService.getNotifications());
+  const [hasData, setHasData] = useState<boolean>(StorageService.hasMockData());
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [showBlankSlateModal, setShowBlankSlateModal] = useState(false);
 
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -46,6 +53,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
       setCurrentUser(StorageService.getCurrentUser());
       setNotifications(StorageService.getNotifications());
       setThemeState(StorageService.getTheme());
+      setHasData(StorageService.hasMockData());
     });
     return unsub;
   }, []);
@@ -167,20 +175,42 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
         {/* PWA Install Button */}
         <PWAInstallButton />
 
-        {/* Demo Data Reset Quick Tool */}
+        {/* Supabase Cloud DB Status Button */}
         <button
-          id="header-reset-demo-button"
-          onClick={() => {
-            if (window.confirm("Reset all MGM payments, batches, and audit logs to initial demo state?")) {
-              StorageService.resetToDemoData();
-            }
-          }}
-          title="Reset to fresh demo data"
-          className="p-2 rounded-xl text-white/60 hover:text-white hover:bg-white/10 border border-transparent hover:border-white/10 transition hidden lg:flex items-center gap-1.5 text-xs backdrop-blur-sm"
+          id="header-supabase-db-button"
+          onClick={() => setShowDbModal(true)}
+          title="Supabase PostgreSQL Cloud DB (Live Sync Active)"
+          className="p-2 rounded-xl text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition flex items-center gap-1.5 text-xs backdrop-blur-sm"
         >
-          <RotateCcw className="w-3.5 h-3.5 text-purple-400" />
-          <span className="text-[11px] font-medium">Reset Demo</span>
+          <div className="relative">
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          </div>
+          <span className="text-[11px] font-mono font-bold hidden sm:inline">Supabase DB</span>
         </button>
+
+        {/* Clear Data (Blank Slate) / Restore Demo Data Quick Action */}
+        {hasData ? (
+          <button
+            id="header-clear-data-button"
+            onClick={() => setShowBlankSlateModal(true)}
+            title="Clear all mock data to test on a blank slate"
+            className="p-2 sm:px-3 rounded-xl text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 transition flex items-center gap-1.5 text-xs backdrop-blur-sm active:scale-95 shadow-sm"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span className="text-[11px] font-bold hidden sm:inline">Clear Data</span>
+          </button>
+        ) : (
+          <button
+            id="header-restore-demo-button"
+            onClick={() => setShowBlankSlateModal(true)}
+            title="Restore sample demo data"
+            className="p-2 sm:px-3 rounded-xl text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 transition flex items-center gap-1.5 text-xs backdrop-blur-sm active:scale-95 shadow-sm animate-pulse"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-[11px] font-bold hidden sm:inline">Load Sample Data</span>
+          </button>
+        )}
 
         {/* Theme Toggle */}
         <button
@@ -328,6 +358,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
           )}
         </div>
       </div>
+
+      {/* Supabase Cloud DB Status & Health Modal */}
+      <SupabaseStatusModal
+        isOpen={showDbModal}
+        onClose={() => setShowDbModal(false)}
+      />
+
+      {/* Clear Data & Blank Slate Testing Modal */}
+      <BlankSlateModal
+        isOpen={showBlankSlateModal}
+        onClose={() => setShowBlankSlateModal(false)}
+        hasData={hasData}
+      />
     </header>
   );
 };

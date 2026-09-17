@@ -57,7 +57,7 @@ export const ReconciliationMatrix: React.FC<ReconciliationMatrixProps> = ({
       : "Disbursal Voucher";
 
   // Bank Directory Lookup via IFSC (uses extracted IFSC if valid, or payment IFSC)
-  const docIfsc = fields?.ifsc?.extracted || payment.ifsc;
+  const docIfsc = String(fields?.ifsc?.extracted || payment.ifsc || "");
   const ifscInfo = ValidationService.lookupIFSC(docIfsc);
 
   // Amount in Words
