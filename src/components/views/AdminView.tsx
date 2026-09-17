@@ -26,6 +26,13 @@ import {
   RefreshCw,
   Cloud,
   Zap,
+  RotateCcw,
+  Percent,
+  SlidersHorizontal,
+  ToggleLeft,
+  ToggleRight,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { StorageService } from "../../services/storageService";
 import { Branch, UserProfile, DebitAccount, UserRole } from "../../types";
@@ -34,13 +41,13 @@ import { ConfirmModal } from "../common/ConfirmModal";
 import { showToast } from "../common/ToastNotification";
 import { SupabaseStatusModal } from "../common/SupabaseStatusModal";
 import { BlankSlateModal } from "../common/BlankSlateModal";
-import { RotateCcw } from "lucide-react";
 
 export const AdminView: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>(StorageService.getBranches());
   const [users, setUsers] = useState<UserProfile[]>(StorageService.getUsers());
   const [accounts, setAccounts] = useState<DebitAccount[]>(StorageService.getDebitAccounts());
   const [hasData, setHasData] = useState<boolean>(StorageService.hasMockData());
+  const [isPhase2Enabled, setIsPhase2Enabled] = useState<boolean>(StorageService.isPhase2Enabled());
   const [showDbModal, setShowDbModal] = useState(false);
   const [showBlankSlateModal, setShowBlankSlateModal] = useState(false);
   const [isSyncingDb, setIsSyncingDb] = useState(false);
@@ -52,6 +59,7 @@ export const AdminView: React.FC = () => {
       setUsers(StorageService.getUsers());
       setAccounts(StorageService.getDebitAccounts());
       setHasData(StorageService.hasMockData());
+      setIsPhase2Enabled(StorageService.isPhase2Enabled());
     });
     return unsubscribe;
   }, []);
@@ -524,6 +532,84 @@ export const AdminView: React.FC = () => {
               <span>Restore Mock Demo Data</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* 2.75 Phase 2 Feature Governance Card (DSA Channel Partner Engine) */}
+      <div
+        id="phase-2-governance-card"
+        className={`p-4.5 rounded-3xl glass-card border transition-all duration-200 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+          isPhase2Enabled
+            ? "border-purple-500/40 bg-purple-950/20 shadow-purple-950/30"
+            : "border-white/10 bg-slate-900/60"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className={`p-3 rounded-2xl border transition-colors ${
+              isPhase2Enabled
+                ? "bg-purple-500/20 border-purple-500/40 text-purple-300"
+                : "bg-white/5 border-white/10 text-white/40"
+            }`}
+          >
+            <SlidersHorizontal className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">
+                Phase 2: DSA Channel Partner &amp; Commission Engine
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
+                  isPhase2Enabled
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                    : "bg-white/10 text-white/50 border-white/15"
+                }`}
+              >
+                {isPhase2Enabled ? "ENABLED & VISIBLE" : "HIDDEN BY DEFAULT"}
+              </span>
+            </div>
+            <p className="text-xs text-white/60 mt-0.5">
+              {isPhase2Enabled
+                ? "Phase 2 modules (DSA Partner Master, Commission Schemes, Disbursals, Auto TDS Hold Desk, Analytics) are active and accessible from the sidebar."
+                : "Phase 2 modules and navigation toggles are hidden. Enable this setting to unlock DSA partner operations and automated commission payouts."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <button
+            type="button"
+            id="toggle-phase2-btn"
+            onClick={() => {
+              const next = !isPhase2Enabled;
+              StorageService.setPhase2Enabled(next);
+              showToast(
+                next
+                  ? "Phase 2 (DSA Channel Partner Engine) is now ENABLED & visible in the sidebar."
+                  : "Phase 2 features are now HIDDEN from the application.",
+                next ? "success" : "info",
+                "Feature Governance"
+              );
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md active:scale-95 border ${
+              isPhase2Enabled
+                ? "bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border-purple-400/40"
+                : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border-white/20"
+            }`}
+          >
+            {isPhase2Enabled ? (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-purple-300" />
+                <span>Disable &amp; Hide Phase 2</span>
+              </>
+            ) : (
+              <>
+                <Eye className="w-3.5 h-3.5 text-white" />
+                <span>Enable Phase 2 Features</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 

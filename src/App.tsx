@@ -117,17 +117,41 @@ export default function App() {
         return <AdminView />;
       // Phase 2: DSA Channel Partner & Commission Engine Views
       case "dsa-master":
-        return <DSAMasterView onNavigate={handleNavigate} />;
+        return StorageService.isPhase2Enabled() ? (
+          <DSAMasterView onNavigate={handleNavigate} />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
       case "commission-rules":
-        return <CommissionRulesView onNavigate={handleNavigate} />;
+        return StorageService.isPhase2Enabled() ? (
+          <CommissionRulesView onNavigate={handleNavigate} />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
       case "disbursals":
-        return <DisbursalsView onNavigate={handleNavigate} />;
+        return StorageService.isPhase2Enabled() ? (
+          <DisbursalsView onNavigate={handleNavigate} />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
       case "commission-payables":
-        return <CommissionPayablesView onNavigate={handleNavigate} />;
+        return StorageService.isPhase2Enabled() ? (
+          <CommissionPayablesView onNavigate={handleNavigate} />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
       case "payout-statements":
-        return <PayoutStatementsView />;
+        return StorageService.isPhase2Enabled() ? (
+          <PayoutStatementsView />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
       case "commission-analytics":
-        return <CommissionAnalyticsView />;
+        return StorageService.isPhase2Enabled() ? (
+          <CommissionAnalyticsView />
+        ) : (
+          <DashboardView onNavigate={handleNavigate} />
+        );
       default:
         return <DashboardView onNavigate={handleNavigate} />;
     }

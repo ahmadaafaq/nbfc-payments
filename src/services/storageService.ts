@@ -47,6 +47,7 @@ const STORAGE_KEYS = {
   CURRENT_BRANCH_ID: "mgm_current_branch_id_v1",
   THEME: "mgm_theme_v1",
   SELECTED_PHASE: "mgm_selected_phase_v1",
+  ENABLE_PHASE_2: "mgm_enable_phase2_v1",
   DSAS: "mgm_phase2_dsas_v1",
   COMMISSION_RULES: "mgm_phase2_rules_v1",
   DISBURSALS: "mgm_phase2_disbursals_v1",
@@ -775,16 +776,38 @@ export class StorageService {
   }
 
   // ==========================================================================
+  // PHASE 2 FEATURE GOVERNANCE (DEFAULT: HIDDEN / DISABLED)
+  // ==========================================================================
+  static isPhase2Enabled(): boolean {
+    if (typeof window === "undefined") return false;
+    const raw = localStorage.getItem(STORAGE_KEYS.ENABLE_PHASE_2);
+    // Hidden / disabled by default
+    return raw === "true";
+  }
+
+  static setPhase2Enabled(enabled: boolean) {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(STORAGE_KEYS.ENABLE_PHASE_2, enabled ? "true" : "false");
+    if (!enabled) {
+      this.setSelectedPhase("PHASE_1");
+    }
+    this.notify();
+  }
+
+  // ==========================================================================
   // PHASE SELECTOR PERSISTENCE (PHASE 1 vs PHASE 2)
   // ==========================================================================
   static getSelectedPhase(): AppPhase {
+    if (!this.isPhase2Enabled()) return "PHASE_1";
     const raw = localStorage.getItem(STORAGE_KEYS.SELECTED_PHASE);
     if (raw === "PHASE_1" || raw === "PHASE_2") return raw;
-    // Default to PHASE_2 so the user can immediately experience Phase 2 Commission Automation
-    return "PHASE_2";
+    return "PHASE_1";
   }
 
   static setSelectedPhase(phase: AppPhase) {
+    if (phase === "PHASE_2" && !this.isPhase2Enabled()) {
+      phase = "PHASE_1";
+    }
     localStorage.setItem(STORAGE_KEYS.SELECTED_PHASE, phase);
     this.notify();
   }

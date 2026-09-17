@@ -64,17 +64,30 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
     "commission-analytics",
   ];
 
+  const [isPhase2Enabled, setIsPhase2Enabled] = useState<boolean>(StorageService.isPhase2Enabled());
+
   const [selectedPhase, setSelectedPhase] = useState<"PHASE_1" | "PHASE_2">(
-    phase2Views.includes(currentView) ? "PHASE_2" : "PHASE_1"
+    isPhase2Enabled && phase2Views.includes(currentView) ? "PHASE_2" : "PHASE_1"
   );
 
   useEffect(() => {
-    if (phase2Views.includes(currentView)) {
+    const unsub = StorageService.subscribe(() => {
+      const enabled = StorageService.isPhase2Enabled();
+      setIsPhase2Enabled(enabled);
+      if (!enabled) {
+        setSelectedPhase("PHASE_1");
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (isPhase2Enabled && phase2Views.includes(currentView)) {
       setSelectedPhase("PHASE_2");
     } else {
       setSelectedPhase("PHASE_1");
     }
-  }, [currentView]);
+  }, [currentView, isPhase2Enabled]);
 
   const phase1Items: NavItem[] = [
     {
@@ -219,48 +232,50 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
             </div>
           )}
 
-          {/* Phase 1 vs Phase 2 Mode Toggle */}
-          {!isEffectiveCollapsed ? (
-            <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-200/80 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-[11px] font-bold">
+          {/* Phase 1 vs Phase 2 Mode Toggle (Only rendered when Phase 2 is enabled in Administration) */}
+          {isPhase2Enabled && (
+            !isEffectiveCollapsed ? (
+              <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-200/80 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-[11px] font-bold animate-in fade-in">
+                <button
+                  onClick={() => {
+                    setSelectedPhase("PHASE_1");
+                    if (phase2Views.includes(currentView)) onNavigate("dashboard");
+                  }}
+                  className={`py-1.5 px-2 rounded-lg text-center transition ${
+                    selectedPhase === "PHASE_1"
+                      ? "bg-purple-600 text-white shadow-sm font-black"
+                      : "text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Phase 1: Ops
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedPhase("PHASE_2");
+                    if (!phase2Views.includes(currentView)) onNavigate("dsa-master");
+                  }}
+                  className={`py-1.5 px-2 rounded-lg text-center transition ${
+                    selectedPhase === "PHASE_2"
+                      ? "bg-purple-600 text-white shadow-sm font-black"
+                      : "text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  Phase 2: DSA
+                </button>
+              </div>
+            ) : (
               <button
                 onClick={() => {
-                  setSelectedPhase("PHASE_1");
-                  if (phase2Views.includes(currentView)) onNavigate("dashboard");
+                  const nextPhase = selectedPhase === "PHASE_1" ? "PHASE_2" : "PHASE_1";
+                  setSelectedPhase(nextPhase);
+                  onNavigate(nextPhase === "PHASE_1" ? "dashboard" : "dsa-master");
                 }}
-                className={`py-1.5 px-2 rounded-lg text-center transition ${
-                  selectedPhase === "PHASE_1"
-                    ? "bg-purple-600 text-white shadow-sm font-black"
-                    : "text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white"
-                }`}
+                title={`Switch to ${selectedPhase === "PHASE_1" ? "Phase 2: DSA Commission" : "Phase 1: Payment Ops"}`}
+                className="w-full py-1.5 rounded-lg text-[10px] font-black bg-purple-600 text-white text-center shadow"
               >
-                Phase 1: Ops
+                {selectedPhase === "PHASE_1" ? "P1" : "P2"}
               </button>
-              <button
-                onClick={() => {
-                  setSelectedPhase("PHASE_2");
-                  if (!phase2Views.includes(currentView)) onNavigate("dsa-master");
-                }}
-                className={`py-1.5 px-2 rounded-lg text-center transition ${
-                  selectedPhase === "PHASE_2"
-                    ? "bg-purple-600 text-white shadow-sm font-black"
-                    : "text-slate-600 dark:text-white/60 hover:text-slate-900 dark:hover:text-white"
-                }`}
-              >
-                Phase 2: DSA
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                const nextPhase = selectedPhase === "PHASE_1" ? "PHASE_2" : "PHASE_1";
-                setSelectedPhase(nextPhase);
-                onNavigate(nextPhase === "PHASE_1" ? "dashboard" : "dsa-master");
-              }}
-              title={`Switch to ${selectedPhase === "PHASE_1" ? "Phase 2: DSA Commission" : "Phase 1: Payment Ops"}`}
-              className="w-full py-1.5 rounded-lg text-[10px] font-black bg-purple-600 text-white text-center shadow"
-            >
-              {selectedPhase === "PHASE_1" ? "P1" : "P2"}
-            </button>
+            )
           )}
 
           {/* Primary Action Button */}
