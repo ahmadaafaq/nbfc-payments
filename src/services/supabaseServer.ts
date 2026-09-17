@@ -4,12 +4,19 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-const SUPABASE_KEY =
+const RAW_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const RAW_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "";
+
+export const isSupabaseConfigured = Boolean(
+  RAW_URL && RAW_KEY && !RAW_URL.includes("placeholder")
+);
+
+const SUPABASE_URL = isSupabaseConfigured ? RAW_URL : "https://placeholder.supabase.co";
+const SUPABASE_KEY = isSupabaseConfigured ? RAW_KEY : "placeholder-key";
 const DB_PASSWORD = process.env.SUPABASE_DB_PASSWORD || "";
 
 // 1. Supabase JS Client for high-level REST & realtime operations

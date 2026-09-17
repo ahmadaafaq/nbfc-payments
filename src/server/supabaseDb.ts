@@ -1,15 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL =
+const RAW_URL =
   process.env.SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL ||
   "";
 
-const SUPABASE_SERVICE_ROLE_KEY =
+const RAW_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_ANON_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "";
+
+export const isSupabaseConfigured = Boolean(
+  RAW_URL && RAW_KEY && !RAW_URL.includes("placeholder")
+);
+
+const SUPABASE_URL = isSupabaseConfigured ? RAW_URL : "https://placeholder.supabase.co";
+const SUPABASE_SERVICE_ROLE_KEY = isSupabaseConfigured ? RAW_KEY : "placeholder-service-key";
 
 export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: {
@@ -18,13 +26,31 @@ export const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KE
   },
 });
 
-export const projectRef = SUPABASE_URL.replace("https://", "").replace(".supabase.co", "");
+export const projectRef = RAW_URL
+  ? RAW_URL.replace("https://", "").replace(".supabase.co", "")
+  : "offline";
 
 export class SupabaseDbService {
   /**
    * Health check for Supabase DB
    */
   static async checkHealth() {
+    if (!isSupabaseConfigured) {
+      return {
+        connected: false,
+        projectRef,
+        projectUrl: "Not configured",
+        tables: {
+          payments: 0,
+          branches: 0,
+          userProfiles: 0,
+          debitAccounts: 0,
+          batches: 0,
+        },
+        error: "Supabase credentials are not configured in environment variables",
+      };
+    }
+
     try {
       const { data, error, count } = await supabaseAdmin
         .from("payments")
@@ -78,6 +104,10 @@ export class SupabaseDbService {
     batches: any[];
     notifications: any[];
   }) {
+    if (!isSupabaseConfigured) {
+      return false;
+    }
+
     try {
       // 1. Seed Branches
       const { data: existingBranches } = await supabaseAdmin
@@ -192,6 +222,7 @@ export class SupabaseDbService {
    * Fetch all payments from Supabase
    */
   static async getPayments() {
+    if (!isSupabaseConfigured) return [];
     try {
       const { data, error } = await supabaseAdmin
         .from("payments")
@@ -210,6 +241,7 @@ export class SupabaseDbService {
    * Upsert a payment in Supabase
    */
   static async upsertPayment(payment: any) {
+    if (!isSupabaseConfigured) return payment;
     try {
       const dbRow = this.mapPaymentToDb(payment);
       const { data, error } = await supabaseAdmin
@@ -230,6 +262,7 @@ export class SupabaseDbService {
    * Delete a payment from Supabase
    */
   static async deletePayment(id: string) {
+    if (!isSupabaseConfigured) return false;
     try {
       const { error } = await supabaseAdmin.from("payments").delete().eq("id", id);
       if (error) throw error;
@@ -244,6 +277,7 @@ export class SupabaseDbService {
    * Fetch all batches from Supabase
    */
   static async getBatches() {
+    if (!isSupabaseConfigured) return [];
     try {
       const { data, error } = await supabaseAdmin
         .from("batches")
@@ -262,6 +296,7 @@ export class SupabaseDbService {
    * Upsert a batch in Supabase
    */
   static async upsertBatch(batch: any) {
+    if (!isSupabaseConfigured) return batch;
     try {
       const dbRow = {
         id: batch.id,
