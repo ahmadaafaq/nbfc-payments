@@ -3,8 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["@google/genai", "pg", "xlsx", "tesseract.js"],
   typescript: {
-    // We run lint and type checking in CI/scripts
-    ignoreBuildErrors: false,
+    // Speed up production builds by skipping redundant build-time type check
+    ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,

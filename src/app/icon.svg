@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+
+    <!-- Outer Glow Ring -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#6366f1" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0.8" />
+    </linearGradient>
+
+    <!-- Wing Left Gradient -->
+    <linearGradient id="wingLeftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="50%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#6b21a8" />
+    </linearGradient>
+
+    <!-- Wing Right Gradient -->
+    <linearGradient id="wingRightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8" />
+      <stop offset="50%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#312e81" />
+    </linearGradient>
+
+    <!-- Center Apex Shield Gradient -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+
+    <!-- Gold Accent Gradient -->
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+
+    <!-- Drop Shadow Filter -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.6" />
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#7c3aed" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Base Squircle Container -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+  
+  <!-- Outer Precision Border -->
+  <rect x="14" y="14" width="484" height="484" rx="116" fill="none" stroke="url(#borderGrad)" stroke-width="6" />
+
+  <!-- Dynamic Geometric FinTech 'MGM' Emblem -->
+  <g filter="url(#dropShadow)">
+    <!-- Left Geometric Pillar of 'M' -->
+    <path d="M120 370 L120 170 C120 152 138 140 154 148 L220 182 C230 187 236 198 236 210 L236 370 C236 380 226 388 216 384 L140 354 C128 350 120 338 120 326 Z" 
+          fill="url(#wingLeftGrad)" />
+
+    <!-- Right Geometric Pillar of 'M' -->
+    <path d="M392 370 L392 170 C392 152 374 140 358 148 L292 182 C282 187 276 198 276 210 L276 370 C276 380 286 388 296 384 L372 354 C384 350 392 338 392 326 Z" 
+          fill="url(#wingRightGrad)" />
+
+    <!-- Central Diamond Crest & Rising FinTech Apex -->
+    <path d="M256 100 L320 205 C326 215 320 228 308 228 L204 228 C192 228 186 215 192 205 Z" 
+          fill="url(#shieldGrad)" />
+
+    <!-- Central Interlocking Growth Node -->
+    <path d="M256 175 L296 240 L256 305 L216 240 Z" 
+          fill="#ffffff" opacity="0.95" />
+
+    <!-- Core Emerald Financial Check / Velocity Symbol -->
+    <circle cx="256" cy="240" r="22" fill="url(#shieldGrad)" />
+    <path d="M246 240 L253 247 L267 233" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Bottom Golden Anchor Arch (Solid Foundation) -->
+    <path d="M170 365 C220 395 292 395 342 365" 
+          fill="none" stroke="url(#accentGrad)" stroke-width="8" stroke-linecap="round" />
+  </g>
+
+  <!-- Monogram Brand Typography Inside Icon -->
+  <text x="256" y="445" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-weight="900" 
+        font-size="36" 
+        fill="#ffffff" 
+        letter-spacing="6" 
+        text-anchor="middle">
+    MGM
+  </text>
+  <text x="256" y="475" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" 
+        font-weight="600" 
+        font-size="16" 
+        fill="#a78bfa" 
+        letter-spacing="3" 
+        text-anchor="middle">
+    FINANCIERS
+  </text>
+</svg>
