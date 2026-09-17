@@ -180,13 +180,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onNavigate }) => {
           id="header-supabase-db-button"
           onClick={() => setShowDbModal(true)}
           title="Supabase PostgreSQL Cloud DB (Live Sync Active)"
-          className="p-2 rounded-xl text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition flex items-center gap-1.5 text-xs backdrop-blur-sm"
+          aria-label="Supabase Cloud DB"
+          className="p-2 rounded-xl text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 transition flex items-center justify-center backdrop-blur-sm active:scale-95 shadow-sm"
         >
           <div className="relative">
-            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <Database className="w-4 h-4 text-emerald-400" />
             <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           </div>
-          <span className="text-[11px] font-mono font-bold hidden sm:inline">Supabase DB</span>
         </button>
 
         {/* Clear Data (Blank Slate) / Restore Demo Data Quick Action */}

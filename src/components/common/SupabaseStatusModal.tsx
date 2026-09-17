@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Database,
   Cloud,
@@ -55,6 +56,17 @@ export const SupabaseStatusModal: React.FC<SupabaseStatusModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchStatus();
+      document.body.style.overflow = "hidden";
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") onClose();
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        document.body.style.overflow = "";
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = "";
     }
   }, [isOpen]);
 
@@ -95,9 +107,14 @@ export const SupabaseStatusModal: React.FC<SupabaseStatusModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-2xl rounded-3xl border border-emerald-500/30 bg-slate-900/95 p-6 shadow-2xl shadow-emerald-950/50 text-white backdrop-blur-2xl">
+  const modalContent = (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSyncing) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-emerald-500/30 bg-slate-900/95 p-6 shadow-2xl shadow-emerald-950/50 text-white backdrop-blur-2xl animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-3">
@@ -293,4 +310,8 @@ export const SupabaseStatusModal: React.FC<SupabaseStatusModalProps> = ({
       </div>
     </div>
   );
+
+  return typeof document !== "undefined"
+    ? createPortal(modalContent, document.body)
+    : null;
 };
